@@ -1,0 +1,5 @@
+package com.gas.ecommerce.modules.payment.mapper;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.gas.ecommerce.modules.payment.entity.Payment;
+import org.apache.ibatis.annotations.Mapper;
+@Mapper public interface PaymentMapper extends BaseMapper<Payment> { }

@@ -1,0 +1,4 @@
+package com.gas.ecommerce.modules.user.controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+@RestController @RequestMapping("/api/v1/users/me/addresses") public class UserAddressController { }

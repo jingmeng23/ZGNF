@@ -1,0 +1,59 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: gas_ecommerce
+      MYSQL_USER: gas
+      MYSQL_PASSWORD: gas_dev_password
+      MYSQL_ROOT_PASSWORD: root_dev_password
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=+08:00"]
+    ports: ["3306:3306"]
+    volumes: ["mysql_data:/var/lib/mysql", "./src/main/resources/db/init:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ugas", "-pgas_dev_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    mem_limit: 512m
+    command: ["redis-server", "--requirepass", "gas_redis_password", "--maxmemory", "384mb", "--maxmemory-policy", "noeviction", "--appendonly", "yes"]
+    volumes: ["redis_data:/data"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "gas_redis_password", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: gas
+      RABBITMQ_DEFAULT_PASS: gas_rabbit_password
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  gas-server:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: gas
+      MYSQL_PASSWORD: gas_dev_password
+      REDIS_HOST: redis
+      REDIS_PASSWORD: gas_redis_password
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: gas
+      RABBITMQ_PASSWORD: gas_rabbit_password
+      JWT_SECRET: local-compose-secret-key-change-before-deploy-2026
+      ENCRYPTION_KEY: local-compose-phone-encryption-key-2026
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+volumes:
+  mysql_data:
+  redis_data:

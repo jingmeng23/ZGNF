@@ -1,0 +1,22 @@
+package com.gas.ecommerce.common.security;
+
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+@Service
+public class UserDetailsServiceImpl implements UserDetailsService {
+    private final com.gas.ecommerce.modules.system.mapper.EmployeeMapper employees;
+    public UserDetailsServiceImpl(com.gas.ecommerce.modules.system.mapper.EmployeeMapper employees) { this.employees = employees; }
+    @Override public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        var employee = employees.selectOne(com.baomidou.mybatisplus.core.toolkit.Wrappers
+                .<com.gas.ecommerce.modules.system.entity.Employee>lambdaQuery()
+                .eq(com.gas.ecommerce.modules.system.entity.Employee::getUsername, username));
+        if (employee == null) throw new UsernameNotFoundException("用户不存在");
+        // Roles and permissions require explicit employee-role assignment; no implicit admin grant.
+        return org.springframework.security.core.userdetails.User.withUsername(employee.getUsername())
+                .password(employee.getPasswordHash()).authorities(java.util.List.of())
+                .disabled(!"active".equals(employee.getStatus())).build();
+    }
+}

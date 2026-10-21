@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    hikari:
+      connection-init-sql: SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:gas_ecommerce}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+app:
+  encryption-key: ${ENCRYPTION_KEY}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-expiration-ms: 7200000
+    refresh-expiration-ms: 604800000
+logging:
+  level:
+    root: INFO
+    com.gas.ecommerce: INFO

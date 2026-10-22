@@ -18,3 +18,4 @@ within(...) 的意思是「匹配指定类型范围内的所有方法执行」
 @ResponseStatus 的作用：它不改 Result 的内容，改的是 HTTP 响应头的状态码
 
 MDC（Mapped Diagnostic Context，映射诊断上下文）是 SLF4J 提供的一个「线程级别的日志变量袋」。 你往里面塞键值对，然后在日志模板里用 %X{key} 引用它，后续这个线程打的所有日志都会自动带上这些值，而你一行打印代码都不用改。
+IService<T> 是 MyBatis-Plus 提供的通用服务接口，继承它之后，CartService 自动拥有增删改查等能力（不用自己写）

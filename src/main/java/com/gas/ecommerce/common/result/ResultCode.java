@@ -1,4 +1,7 @@
 package com.gas.ecommerce.common.result;
+/**
+ * 统一响应和分页数据类型，约定接口返回的数据结构。
+ */
 
 public enum ResultCode {
     SUCCESS(200, "success"), PARAMETER_INVALID(400001, "参数错误"),

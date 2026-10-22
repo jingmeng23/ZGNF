@@ -8,6 +8,9 @@ import java.util.Base64;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+/**
+ * 给敏感字段提供加解密能力。
+ */
 
 public final class EncryptUtils {
     private EncryptUtils() { }

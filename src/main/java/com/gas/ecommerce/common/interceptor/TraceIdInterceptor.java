@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
+/**
+ * 请求拦截组件，在 Web 请求处理前后执行统一逻辑。
+ */
 public class TraceIdInterceptor implements HandlerInterceptor {
     public static final String TRACE_ID = "traceId";
     public static String currentTraceId() { return MDC.get(TRACE_ID); }

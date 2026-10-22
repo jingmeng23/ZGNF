@@ -15,6 +15,9 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import java.io.IOException;
 
 @Configuration
+/**
+ * 应用配置类，负责向 Spring 注册和配置基础设施组件。
+ */
 public class RedisConfig {
     @Bean Jackson2ObjectMapperBuilderCustomizer longAsStringCustomizer() {
         return builder -> {

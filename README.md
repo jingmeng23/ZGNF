@@ -2,7 +2,11 @@
 
 燃气智能服务电商后端框架，Java 25（已在 OpenJDK 25.0.2 验证）、Spring Boot 3.5.16、Maven。
 
+前端管理框架位于 [frontend](frontend/README.md)，使用 Vue 3 + TypeScript + Vite，包含经营总览及 11 个管理模块。启动后访问 `http://localhost:5173/#/admin`；默认展示演示数据，管理员授权及业务接口待后端继续实现。
+
 ## 构建
+
+Java 初学者可先阅读 [新手阅读指南](docs/新手阅读指南.md)，其中按短信登录请求顺序解释了项目分层和核心组件。
 
 ```shell
 mvn clean compile

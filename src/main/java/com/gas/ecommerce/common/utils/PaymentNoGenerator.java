@@ -6,6 +6,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 通用工具类，封装可重复使用的辅助功能。
+ */
 public class PaymentNoGenerator {
     private final StringRedisTemplate redis;
     public PaymentNoGenerator(StringRedisTemplate redis) { this.redis = redis; }

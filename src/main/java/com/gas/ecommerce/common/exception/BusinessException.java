@@ -1,4 +1,7 @@
 package com.gas.ecommerce.common.exception;
+/**
+ * 异常或错误码类型，用于统一表达程序处理失败的原因。
+ */
 
 public class BusinessException extends RuntimeException {
     private final int code;

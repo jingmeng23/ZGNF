@@ -7,6 +7,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 @Configuration
+/**
+ * 应用配置类，负责向 Spring 注册和配置基础设施组件。
+ */
 public class CorsConfig {
     @Bean CorsFilter corsFilter(@org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins:http://localhost:5173,http://localhost:3000}") String origins) {
         var config = new CorsConfiguration();

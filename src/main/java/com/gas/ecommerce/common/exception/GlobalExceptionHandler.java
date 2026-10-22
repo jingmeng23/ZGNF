@@ -14,13 +14,19 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
+/**
+ * 异常或错误码类型，用于统一表达程序处理失败的原因。
+ */
 public class GlobalExceptionHandler {
+    /** 记录完整异常供服务器排查；返回客户端的消息不会包含堆栈信息。 */
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** 业务主动拒绝当前操作时，返回异常携带的业务码和说明。 */
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> business(BusinessException ex) { return Result.of(ex.getCode(), ex.getMessage(), null); }
 
+    /** @Valid 校验失败时，把每个参数字段及其首条错误说明放进响应 data。 */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Map<String, String>> validation(MethodArgumentNotValidException ex) {
@@ -29,10 +35,12 @@ public class GlobalExceptionHandler {
         return Result.of(ErrorCode.PARAMETER_INVALID, "参数校验失败", errors);
     }
 
+    /** 用户身份有效但权限不足时，返回禁止访问的响应。 */
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public Result<Void> denied(AccessDeniedException ex) { return Result.of(ErrorCode.ACCESS_DENIED, "无权访问", null); }
 
+    /** 兜底处理未预期异常：详细堆栈只写服务端日志，客户端只看到通用提示。 */
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> unexpected(Exception ex, HttpServletRequest request) {

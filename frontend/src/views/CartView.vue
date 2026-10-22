@@ -1,0 +1,7 @@
+<script setup lang="ts">
+import { ShoppingBag, Minus, Plus } from 'lucide-vue-next'
+import { useCartStore } from '../stores/cart'
+import ApplianceArt from '../components/ApplianceArt.vue'
+const cart = useCartStore()
+</script>
+<template><header class="page-heading"><span class="eyebrow">YOUR HOME ESSENTIALS</span><h1>购物车 <small>{{ cart.count }} 件好物</small></h1><p>演示购物车仅保存在当前页面会话中，不会产生真实订单。</p></header><div v-if="!cart.items.length" class="empty-state"><ShoppingBag :size="48" :stroke-width="1.2" /><h2>为家添一份安心好物</h2><p>购物车还是空的，去看看精选商品吧。</p><RouterLink class="button" to="/catalog">去逛逛商城</RouterLink></div><template v-else><div class="cart-list"><article v-for="item in cart.items" :key="item.product.id" class="cart-row"><ApplianceArt :kind="item.product.id" /><div class="cart-description"><h3>{{ item.product.name }}</h3><p>{{ item.product.subtitle }}</p><strong>¥{{ item.product.price.toFixed(2) }}</strong></div><div class="stepper"><button :aria-label="`减少${item.product.name}数量，减至零会移除`" @click="cart.change(item.product.id, -1)"><Minus :size="15" /></button><span>{{ item.quantity }}</span><button :aria-label="`增加${item.product.name}数量`" :disabled="item.quantity >= 99" @click="cart.change(item.product.id, 1)"><Plus :size="15" /></button></div></article></div><div class="cart-summary"><div>合计 <strong>¥{{ (cart.totalCents / 100).toFixed(2) }}</strong><small>演示金额，不含配送及安装费用</small></div><button class="button" disabled>结算待开放</button></div></template></template>

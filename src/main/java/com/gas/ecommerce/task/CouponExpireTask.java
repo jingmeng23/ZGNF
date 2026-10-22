@@ -2,6 +2,9 @@ package com.gas.ecommerce.task;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+/**
+ * 后台任务组件，由消息监听或定时调度触发。
+ */
 @Component public class CouponExpireTask {
     private final JdbcTemplate jdbc;
     public CouponExpireTask(JdbcTemplate jdbc) { this.jdbc = jdbc; }

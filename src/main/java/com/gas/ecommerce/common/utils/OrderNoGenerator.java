@@ -6,6 +6,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
+/**
+ * 利用 Redis 的原子自增能力，为每次调用生成一个全局唯一、按天递增的订单编号
+ */
 public class OrderNoGenerator {
     private final StringRedisTemplate redis;
     public OrderNoGenerator(StringRedisTemplate redis) { this.redis = redis; }

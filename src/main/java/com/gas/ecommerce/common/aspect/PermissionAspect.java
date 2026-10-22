@@ -9,10 +9,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Aspect @Component
+/**
+ * 面向切面组件，通过代理在目标方法执行前后统一处理横切逻辑。
+ * 权限校验切面
+ */
 public class PermissionAspect {
     @Around("@annotation(permission)")
     public Object check(ProceedingJoinPoint point, RequiresPermission permission) throws Throwable {
         var auth = SecurityContextHolder.getContext().getAuthentication();
+        //
         if (auth == null || auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals(permission.value()))) {
             throw new AccessDeniedException("Missing permission: " + permission.value());
         }

@@ -8,6 +8,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Configuration
+/**
+ * 应用配置类，负责向 Spring 注册和配置基础设施组件。
+ */
 public class OssConfig {
     @Bean(destroyMethod = "shutdown")
     @ConditionalOnProperty(prefix = "aliyun.oss", name = "enabled", havingValue = "true")

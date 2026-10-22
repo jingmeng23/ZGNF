@@ -6,6 +6,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 @Service
+/**
+ * 登录阶段，把用户名转成 UserDetails，供密码校验使用。
+ */
 public class UserDetailsServiceImpl implements UserDetailsService {
     private final com.gas.ecommerce.modules.system.mapper.EmployeeMapper employees;
     public UserDetailsServiceImpl(com.gas.ecommerce.modules.system.mapper.EmployeeMapper employees) { this.employees = employees; }
@@ -14,7 +17,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .<com.gas.ecommerce.modules.system.entity.Employee>lambdaQuery()
                 .eq(com.gas.ecommerce.modules.system.entity.Employee::getUsername, username));
         if (employee == null) throw new UsernameNotFoundException("用户不存在");
-        // Roles and permissions require explicit employee-role assignment; no implicit admin grant.
+        // 员工角色和权限需要通过关联表显式加载；不能因为用户名而默认授予管理员权限。
         return org.springframework.security.core.userdetails.User.withUsername(employee.getUsername())
                 .password(employee.getPasswordHash()).authorities(java.util.List.of())
                 .disabled(!"active".equals(employee.getStatus())).build();

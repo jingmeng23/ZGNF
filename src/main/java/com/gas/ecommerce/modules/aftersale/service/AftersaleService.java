@@ -1,8 +1,18 @@
 package com.gas.ecommerce.modules.aftersale.service;
-// MyBatis-Plus 3.5.17 将 Spring Service 接口包从 extension.service 调整到了 spring.service。
+
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.gas.ecommerce.common.result.PageResult;
+import com.gas.ecommerce.modules.aftersale.dto.*;
 import com.gas.ecommerce.modules.aftersale.entity.Aftersale;
-/**
- * 业务服务接口，供 Controller 调用；继承 IService 后包含通用 CRUD 契约。
- */
-public interface AftersaleService extends IService<Aftersale> { }
+import com.gas.ecommerce.modules.aftersale.vo.AftersaleVO;
+
+public interface AftersaleService extends IService<Aftersale> {
+    AftersaleVO create(Long userId, AftersaleCreateRequest request);
+    PageResult<AftersaleVO> listMine(Long userId, AftersaleQueryRequest query);
+    AftersaleVO detailMine(Long userId, Long id);
+    AftersaleVO cancelMine(Long userId, Long id);
+    PageResult<AftersaleVO> listAdmin(AftersaleQueryRequest query);
+    AftersaleVO detailAdmin(Long id);
+    AftersaleVO review(Long id, Long adminId, AftersaleReviewRequest request);
+    AftersaleVO complete(Long id, AftersaleCompleteRequest request);
+}

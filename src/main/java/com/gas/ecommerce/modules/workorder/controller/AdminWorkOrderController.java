@@ -1,7 +1,20 @@
 package com.gas.ecommerce.modules.workorder.controller;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-/**
- * HTTP 接口控制器；具体请求方法以类中标注的映射注解为准。
- */
-@RestController @RequestMapping("/api/v1/admin/work-orders") public class AdminWorkOrderController { }
+import com.gas.ecommerce.common.result.*;
+import com.gas.ecommerce.common.security.SecurityUtils;
+import com.gas.ecommerce.modules.workorder.dto.*;
+import com.gas.ecommerce.modules.workorder.vo.*;
+import com.gas.ecommerce.modules.workorder.service.WorkOrderService;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+import com.gas.ecommerce.common.annotation.RequiresPermission;
+@RestController @RequestMapping("/api/v1/admin/work-orders")
+public class AdminWorkOrderController {
+    private final WorkOrderService service;
+    public AdminWorkOrderController(WorkOrderService service) {this.service=service;}
+    @GetMapping @RequiresPermission("workorder:read") public Result<PageResult<WorkOrderVO>> list(@Valid @ModelAttribute WorkOrderQuery q) {return Result.success(service.listAdmin(q));}
+    @GetMapping("/{id}") @RequiresPermission("workorder:read") public Result<WorkOrderVO> detail(@PathVariable Long id) {return Result.success(service.detailAdmin(id));}
+    @GetMapping("/{id}/logs") @RequiresPermission("workorder:read") public Result<PageResult<WorkOrderLogVO>> logs(@PathVariable Long id,@Valid @ModelAttribute PageRequest q) {return Result.success(service.logs(null,id,q));}
+    @PutMapping("/{id}/assign") @RequiresPermission("workorder:assign") public Result<WorkOrderVO> assign(@PathVariable Long id,@Valid @RequestBody WorkOrderAssignRequest r) {return Result.success(service.assign(SecurityUtils.currentUserId(),id,r));}
+    @PutMapping("/{id}/start") @RequiresPermission("workorder:process") public Result<WorkOrderVO> start(@PathVariable Long id,@Valid @RequestBody WorkOrderActionRequest r) {return Result.success(service.start(SecurityUtils.currentUserId(),id,r));}
+    @PutMapping("/{id}/complete") @RequiresPermission("workorder:process") public Result<WorkOrderVO> complete(@PathVariable Long id,@Valid @RequestBody WorkOrderActionRequest r) {return Result.success(service.complete(SecurityUtils.currentUserId(),id,r));}
+}

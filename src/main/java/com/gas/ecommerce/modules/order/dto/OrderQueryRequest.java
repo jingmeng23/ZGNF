@@ -1,5 +1,15 @@
 package com.gas.ecommerce.modules.order.dto;
-/**
- * 数据传输对象（DTO），承接接口传入或传出的数据，不直接负责业务处理。
- */
-public record OrderQueryRequest(Integer page, Integer size, String status) { }
+
+import com.gas.ecommerce.common.result.PageRequest;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class OrderQueryRequest extends PageRequest {
+    @Pattern(regexp = "pending_payment|paid|processing|completed|cancelled|refunded")
+    private String status;
+    @Size(max = 40) private String orderNo;
+}

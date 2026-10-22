@@ -33,10 +33,19 @@ public class SecurityConfig {
                 // 无状态模式不会用服务器 Session 记住登录用户。
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/v1/products", "/api/v1/products/*", "/api/v1/categories").permitAll()
                         // 登录、支付平台回调、API 文档和健康检查无需先登录。
                         .requestMatchers("/api/v1/auth/**", "/api/v1/payment/callback/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/health").permitAll()
                         // hasRole("ADMIN") 实际检查的权限名是 ROLE_ADMIN。
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                         .requestMatchers("/api/v1/coupons", "/api/v1/coupons/**", "/api/v1/user-coupons", "/api/v1/user-coupons/**").hasRole("USER")
+                         .requestMatchers("/api/v1/work-orders", "/api/v1/work-orders/**").hasRole("USER")
+                        .requestMatchers("/api/v1/cart", "/api/v1/cart/**").hasRole("USER")
+                        .requestMatchers("/api/v1/payments", "/api/v1/payments/**").hasRole("USER")
+                        .requestMatchers("/api/v1/orders", "/api/v1/orders/**").hasRole("USER")
+                        .requestMatchers("/api/v1/aftersales", "/api/v1/aftersales/**").hasRole("USER")
                         // 其余请求必须先通过 JWT 认证。
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, cause) -> {

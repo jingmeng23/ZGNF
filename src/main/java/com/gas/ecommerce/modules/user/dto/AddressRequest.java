@@ -1,5 +1,14 @@
 package com.gas.ecommerce.modules.user.dto;
-/**
- * 数据传输对象（DTO），承接接口传入或传出的数据，不直接负责业务处理。
- */
-public record AddressRequest(String receiver, String phone, String province, String city, String district, String detail, Boolean isDefault) { }
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+public record AddressRequest(
+        @NotBlank @Size(max = 64) String receiver,
+        @NotBlank @Pattern(regexp = "1[3-9]\\d{9}") String phone,
+        @NotBlank @Size(max = 64) String province,
+        @NotBlank @Size(max = 64) String city,
+        @NotBlank @Size(max = 64) String district,
+        @NotBlank @Size(max = 255) String detail,
+        Boolean isDefault) { }

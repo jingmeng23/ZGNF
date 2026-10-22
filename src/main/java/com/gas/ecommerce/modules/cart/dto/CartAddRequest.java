@@ -1,5 +1,8 @@
 package com.gas.ecommerce.modules.cart.dto;
-/**
- * 数据传输对象（DTO），承接接口传入或传出的数据，不直接负责业务处理。
- */
-public record CartAddRequest(Long productId, Integer quantity) { }
+
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+
+public record CartAddRequest(@NotNull @Min(1) Long productId,
+        @NotNull @Min(1) @Max(999) Integer quantity) { }

@@ -1,5 +1,9 @@
 package com.gas.ecommerce.modules.payment.dto;
-/**
- * 数据传输对象（DTO），承接接口传入或传出的数据，不直接负责业务处理。
- */
-public record PaymentCreateRequest(Long orderId, String channel) { }
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
+public record PaymentCreateRequest(@NotNull @Positive Long orderId,
+        @NotBlank @Size(max = 30) String channel) { }

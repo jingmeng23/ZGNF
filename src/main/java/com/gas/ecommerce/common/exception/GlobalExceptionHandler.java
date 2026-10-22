@@ -18,6 +18,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 异常或错误码类型，用于统一表达程序处理失败的原因。
  */
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Result<Void> credentials(Exception ex) { return Result.of(ErrorCode.UNAUTHENTICATED, "账号、密码或管理员授权无效", null); }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+            org.springframework.validation.BindException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> invalidInput(Exception ex) { return Result.of(ErrorCode.PARAMETER_INVALID, "请求参数格式错误", null); }
     /** 记录完整异常供服务器排查；返回客户端的消息不会包含堆栈信息。 */
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 

@@ -5,4 +5,9 @@ import org.apache.ibatis.annotations.Mapper;
 /**
  * 数据库访问接口，继承 BaseMapper 后可使用通用增删改查。
  */
-@Mapper public interface PaymentMapper extends BaseMapper<Payment> { }
+@Mapper public interface PaymentMapper extends BaseMapper<Payment> {
+    @org.apache.ibatis.annotations.Select("SELECT * FROM payment WHERE order_id=#{orderId} AND status='success' AND is_deleted=0 ORDER BY id LIMIT 1 FOR UPDATE")
+    Payment lockSuccessfulForOrder(@org.apache.ibatis.annotations.Param("orderId") Long orderId);
+    @org.apache.ibatis.annotations.Select("SELECT * FROM payment WHERE id=#{id} AND is_deleted=0 FOR UPDATE")
+    Payment lockById(@org.apache.ibatis.annotations.Param("id") Long id);
+}

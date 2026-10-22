@@ -1,5 +1,14 @@
 package com.gas.ecommerce.modules.product.dto;
-/**
- * 数据传输对象（DTO），承接接口传入或传出的数据，不直接负责业务处理。
- */
-public record ProductQueryRequest(Integer page, Integer size, Long categoryId, String keyword, String sort, String order) { }
+
+import com.gas.ecommerce.common.result.PageRequest;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class ProductQueryRequest extends PageRequest {
+    @Positive private Long categoryId;
+    @Size(max = 100) private String keyword;
+}

@@ -8,4 +8,4 @@ import lombok.EqualsAndHashCode;
 /**
  * 数据库实体，字段对应数据库表中的列。
  */
-@Data @EqualsAndHashCode(callSuper = true) @TableName("payment") public class Payment extends BaseEntity { private String paymentNo; private Long orderId; private Long userId; private BigDecimal amount; private String channel; private String status; private LocalDateTime paidTime; }
+@Data @EqualsAndHashCode(callSuper = true) @TableName("payment") public class Payment extends BaseEntity { private String paymentNo; private Long orderId; private Long userId; private BigDecimal amount; private String channel; private String status; private LocalDateTime paidTime; private String providerTransactionNo; }

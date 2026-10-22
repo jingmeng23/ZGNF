@@ -1,7 +1,34 @@
 package com.gas.ecommerce.modules.aftersale.controller;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-/**
- * HTTP 接口控制器；具体请求方法以类中标注的映射注解为准。
- */
-@RestController @RequestMapping("/api/v1/admin/aftersales") public class AdminAftersaleController { }
+
+import com.gas.ecommerce.common.annotation.RequiresPermission;
+import com.gas.ecommerce.common.result.*;
+import com.gas.ecommerce.modules.aftersale.dto.*;
+import com.gas.ecommerce.modules.aftersale.service.AftersaleService;
+import com.gas.ecommerce.modules.aftersale.vo.AftersaleVO;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/admin/aftersales")
+public class AdminAftersaleController {
+    private final AftersaleService aftersales;
+    public AdminAftersaleController(AftersaleService aftersales) { this.aftersales = aftersales; }
+
+    @GetMapping @RequiresPermission("aftersale:read")
+    public Result<PageResult<AftersaleVO>> list(@Valid @ModelAttribute AftersaleQueryRequest query) {
+        return Result.success(aftersales.listAdmin(query));
+    }
+    @GetMapping("/{id}") @RequiresPermission("aftersale:read")
+    public Result<AftersaleVO> detail(@PathVariable Long id) {
+        return Result.success(aftersales.detailAdmin(id));
+    }
+    @PutMapping("/{id}/review") @RequiresPermission("aftersale:write")
+    public Result<AftersaleVO> review(@PathVariable Long id, @Valid @RequestBody AftersaleReviewRequest request) {
+        Long adminId = com.gas.ecommerce.common.security.SecurityUtils.currentUserId();
+        return Result.success(aftersales.review(id, adminId, request));
+    }
+    @PutMapping("/{id}/complete") @RequiresPermission("aftersale:write")
+    public Result<AftersaleVO> complete(@PathVariable Long id, @Valid @RequestBody AftersaleCompleteRequest request) {
+        return Result.success(aftersales.complete(id, request));
+    }
+}

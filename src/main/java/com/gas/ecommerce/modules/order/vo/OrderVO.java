@@ -1,6 +1,10 @@
 package com.gas.ecommerce.modules.order.vo;
+
 import java.math.BigDecimal;
-/**
- * 视图对象（VO），整理后返回给客户端展示的数据。
- */
-public record OrderVO(Long id, String orderNo, String status, BigDecimal totalAmount, BigDecimal payAmount) { }
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record OrderVO(Long id, Long userId, String orderNo, String status,
+        BigDecimal totalAmount, BigDecimal payAmount, Long userCouponId, BigDecimal discountAmount, String remark,
+        LocalDateTime createTime, LocalDateTime expireTime,
+        OrderAddressVO address, List<OrderItemVO> items) { }

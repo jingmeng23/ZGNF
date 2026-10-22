@@ -1,8 +1,17 @@
 package com.gas.ecommerce.modules.cart.service;
-// MyBatis-Plus 3.5.17 将 Spring Service 接口包从 extension.service 调整到了 spring.service。
+
 import com.baomidou.mybatisplus.spring.service.IService;
+import com.gas.ecommerce.modules.cart.dto.CartAddRequest;
 import com.gas.ecommerce.modules.cart.entity.CartItem;
-/**
- * 业务服务接口，供 Controller 调用；继承 IService 后包含通用 CRUD 契约。
- */
-public interface CartService extends IService<CartItem> { }
+import com.gas.ecommerce.modules.cart.vo.CartVO;
+
+public interface CartService extends IService<CartItem> {
+    CartVO getCart(Long userId);
+    CartVO add(Long userId, CartAddRequest request);
+    CartVO updateQuantity(Long userId, Long itemId, Integer quantity);
+    CartVO setSelected(Long userId, Long itemId, boolean selected);
+    CartVO setAllSelected(Long userId, boolean selected);
+    void deleteItem(Long userId, Long itemId);
+    void deleteSelected(Long userId);
+    void clear(Long userId);
+}

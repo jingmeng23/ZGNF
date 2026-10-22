@@ -8,4 +8,14 @@ import lombok.EqualsAndHashCode;
 /**
  * 数据库实体，字段对应数据库表中的列。
  */
-@Data @EqualsAndHashCode(callSuper = true) @TableName("coupon") public class Coupon extends BaseEntity { private String name; private BigDecimal amount; private BigDecimal minimumAmount; private LocalDateTime startTime; private LocalDateTime endTime; private Integer quantity; private String status; }
+@Data @EqualsAndHashCode(callSuper = true) @TableName("coupon") public class Coupon extends BaseEntity {
+    private String name;
+    private BigDecimal amount;
+    private BigDecimal minimumAmount;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private Integer quantity;
+    private String status;
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false) private Long claimedQuantity;
+    @com.baomidou.mybatisplus.annotation.TableField(exist=false) private Long remainingQuantity;
+}

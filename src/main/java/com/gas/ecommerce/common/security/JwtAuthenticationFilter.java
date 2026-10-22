@@ -19,7 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /** 令牌工具负责验签并提取用户 ID 和角色。 */
     private final JwtTokenProvider tokens;
-    public JwtAuthenticationFilter(JwtTokenProvider tokens) { this.tokens = tokens; }
+    private final com.gas.ecommerce.modules.auth.service.AdminAuthService admins;
+    public JwtAuthenticationFilter(JwtTokenProvider tokens, com.gas.ecommerce.modules.auth.service.AdminAuthService admins) { this.tokens = tokens; this.admins = admins; }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         // Bearer 是 Authorization 请求头中表示令牌认证方式的标准前缀。
         String header = request.getHeader("Authorization");
@@ -29,7 +30,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (tokens.validateAccessToken(token)) {
                 Long userId = tokens.getUserIdFromToken(token);
                 String role = tokens.getRoleFromToken(token);
-                var authorities = role == null ? List.<SimpleGrantedAuthority>of() : List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
+                var authorities = List.<SimpleGrantedAuthority>of();
+                if ("admin".equals(role)) {
+                    try { authorities = admins.authorities(userId); }
+                    catch (org.springframework.security.authentication.BadCredentialsException ex) {
+                        chain.doFilter(request, response); return;
+                    }
+                } else if ("user".equals(role)) authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
                 // Spring Security 后续授权规则从 SecurityContext 读取当前用户和角色。
                 // 这里使用 Long 作为 principal，因此 SecurityUtils 可以直接取到 userId。
                 SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userId, null, authorities));

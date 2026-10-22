@@ -1,4 +1,9 @@
 app:
+  payments:
+    allowed-channels: test
+    callback-secret: test-only-payment-callback-secret-2026
+  orders:
+    expiry-scan-enabled: false
   encryption-key: test-only-phone-encryption-key-2026
   jwt:
     secret: test-only-secret-key-at-least-thirty-two-bytes-2026

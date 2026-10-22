@@ -6,4 +6,14 @@ import lombok.EqualsAndHashCode;
 /**
  * 数据库实体，字段对应数据库表中的列。
  */
-@Data @EqualsAndHashCode(callSuper = true) @TableName("employee") public class Employee extends BaseEntity { private Long departmentId; private Long positionId; private String username; private String passwordHash; private String phone; private String phoneLast4; private String status; }
+@Data @EqualsAndHashCode(callSuper = true) @TableName("employee") public class Employee extends BaseEntity {
+    private Long departmentId;
+    private Long positionId;
+    private Long storeId;
+    private String name;
+    private String username;
+    private String passwordHash;
+    private String phone;
+    private String phoneLast4;
+    private String status;
+}

@@ -7,4 +7,17 @@ import lombok.EqualsAndHashCode;
 /**
  * 数据库实体，字段对应数据库表中的列。
  */
-@Data @EqualsAndHashCode(callSuper = true) @TableName("aftersale") public class Aftersale extends BaseEntity { private String aftersaleNo; private Long orderId; private Long userId; private String reason; private BigDecimal amount; private String status; }
+@Data @EqualsAndHashCode(callSuper = true) @TableName("aftersale") public class Aftersale extends BaseEntity {
+    private String aftersaleNo;
+    private Long orderId;
+    private Long userId;
+    private String reason;
+    private BigDecimal amount;
+    private String status;
+    private String requestId;
+    private String reviewRemark;
+    private Long reviewedBy;
+    private String refundReference;
+    private String completionRemark;
+    private java.time.LocalDateTime completedTime;
+}

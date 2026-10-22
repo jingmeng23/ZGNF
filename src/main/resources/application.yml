@@ -1,5 +1,13 @@
 server:
   port: 8080
+app:
+  payments:
+    allowed-channels: ${PAYMENT_ALLOWED_CHANNELS:}
+    callback-secret: ${PAYMENT_CALLBACK_SECRET:}
+  admin-bootstrap:
+    enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+    username: ${ADMIN_BOOTSTRAP_USERNAME:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}
 spring:
   application:
     name: gas-ecommerce

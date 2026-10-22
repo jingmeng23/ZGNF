@@ -8,4 +8,17 @@ import lombok.EqualsAndHashCode;
 /**
  * 数据库实体，字段对应数据库表中的列。
  */
-@Data @EqualsAndHashCode(callSuper = true) @TableName("`order`") public class Order extends BaseEntity { private String orderNo; private Long userId; private String status; private BigDecimal totalAmount; private BigDecimal payAmount; private LocalDateTime expireTime; }
+@Data @EqualsAndHashCode(callSuper = true) @TableName("`order`")
+public class Order extends BaseEntity {
+    private String orderNo;
+    private Long userId;
+    private String status;
+    private BigDecimal totalAmount;
+    private BigDecimal payAmount;
+    private Long userCouponId;
+    private BigDecimal discountAmount;
+    private LocalDateTime expireTime;
+    private String addressSnapshot;
+    private String remark;
+    private String requestId;
+}

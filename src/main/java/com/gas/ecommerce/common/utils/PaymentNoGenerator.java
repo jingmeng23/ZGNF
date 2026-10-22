@@ -15,6 +15,7 @@ public class PaymentNoGenerator {
     public String next() {
         String day = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         Long sequence = redis.opsForValue().increment("seq:payment:" + day);
-        return "PAY" + day + String.format("%08d", sequence == null ? 0 : sequence);
+        if (sequence == null || sequence <= 0) throw new IllegalStateException("支付单号生成失败");
+        return "PAY" + day + String.format("%08d", sequence);
     }
 }

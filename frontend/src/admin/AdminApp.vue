@@ -73,7 +73,7 @@ const pageName = computed(
       <aside class="admin-sidebar">
         <RouterLink to="/admin" class="admin-brand"
           ><span class="admin-brand-mark"><Flame :size="20" /></span
-          ><span>中南燃服<small>运营管理平台</small></span></RouterLink
+          ><span>自贡能发<small>运营管理平台</small></span></RouterLink
         >
         <div class="admin-workspace">
           <span class="workspace-icon"><Building2 :size="17" /></span

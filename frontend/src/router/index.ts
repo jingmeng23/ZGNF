@@ -72,5 +72,5 @@ router.beforeEach((to) => {
   }
   if (to.meta.requiresAuth && !session.read())
     return { path: '/login', query: { redirect: to.fullPath } }
-  document.title = `${modules[String(to.params.module)]?.title || String(to.meta.title || '智慧商城')} · 中南燃服`
+  document.title = `${modules[String(to.params.module)]?.title || String(to.meta.title || '智慧商城')} · 自贡能发`
 })

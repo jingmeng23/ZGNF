@@ -461,7 +461,7 @@ export const modules: Record<string, AdminModule> = {
       {
         id: '1',
         key: '商城名称',
-        value: '中南燃服智慧商城',
+        value: '自贡能发智慧商城',
         group: '商城设置',
         updated: '2026-10-18',
       },

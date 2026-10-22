@@ -43,7 +43,7 @@ onUnmounted(() => window.removeEventListener('auth:expired', expired))
     <aside class="sidebar">
       <RouterLink to="/" class="brand"
         ><span class="brand-mark"><Flame :size="26" /></span
-        ><span>中南燃服<small>SMART GAS · BETTER LIFE</small></span></RouterLink
+        ><span>自贡能发<small>SMART GAS · BETTER LIFE</small></span></RouterLink
       >
       <p class="nav-caption">美好生活，从安心开始</p>
       <nav aria-label="主导航">
@@ -64,7 +64,7 @@ onUnmounted(() => window.removeEventListener('auth:expired', expired))
         <p>专业服务，守护每一个家。</p>
         <RouterLink to="/services">了解安心服务 <ArrowUpRight :size="15" /></RouterLink>
       </div>
-      <p class="sidebar-bottom">中南燃服 · 智慧生活服务平台<small>用心服务每一个温暖的家</small></p>
+      <p class="sidebar-bottom">自贡能发 · 智慧生活服务平台<small>用心服务每一个温暖的家</small></p>
     </aside>
     <main id="main-content" class="main"><RouterView /></main>
     <nav class="bottom-nav" aria-label="移动端导航">

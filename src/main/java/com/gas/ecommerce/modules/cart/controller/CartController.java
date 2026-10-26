@@ -6,10 +6,13 @@ import com.gas.ecommerce.common.security.SecurityUtils;
 import com.gas.ecommerce.modules.cart.dto.CartAddRequest;
 import com.gas.ecommerce.modules.cart.dto.CartQuantityRequest;
 import com.gas.ecommerce.modules.cart.dto.CartSelectionRequest;
+import com.gas.ecommerce.modules.cart.dto.CartQuery;
+import com.gas.ecommerce.modules.cart.dto.CartBatchDeleteRequest;
 import com.gas.ecommerce.modules.cart.service.CartService;
 import com.gas.ecommerce.modules.cart.vo.CartVO;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
+import com.gas.ecommerce.common.annotation.Idempotent;
 
 /**
  * 购物车接口控制器。
@@ -33,9 +36,9 @@ public class CartController {
     // GET  /api/v1/cart
     // ─────────────────────────────────────────
     @GetMapping                                     // 映射 GET 请求
-    public Result<CartVO> getCart() {
+    public Result<CartVO> getCart(@Valid @ModelAttribute CartQuery query) {
         // 提取当前用户 ID → 调用 Service 查询购物车 → 包装成成功响应返回
-        return Result.success(cart.getCart(SecurityUtils.currentUserId()));
+        return Result.success(cart.getCart(SecurityUtils.currentUserId(), query));
     }
 
     // ─────────────────────────────────────────
@@ -43,6 +46,7 @@ public class CartController {
     // POST /api/v1/cart/items
     // ─────────────────────────────────────────
     @PostMapping("/items")                          // 映射 POST 请求
+    @Idempotent
     public Result<CartVO> add(
             @Valid                                  // 开启自动校验（DTO 里写了 @NotNull 等约束）
             @RequestBody CartAddRequest request) {  // 从请求体 JSON 反序列化为 Java 对象
@@ -54,6 +58,7 @@ public class CartController {
     // PUT  /api/v1/cart/items/{id}
     // ─────────────────────────────────────────
     @PutMapping("/items/{id}")                      // 映射 PUT 请求，{id} 为路径变量
+    @Idempotent
     public Result<CartVO> updateQuantity(
             @PathVariable Long id,                  // 提取 URL 中的 {id}（如 /items/101 中的 101）
             @Valid @RequestBody CartQuantityRequest request) {
@@ -101,6 +106,12 @@ public class CartController {
     @DeleteMapping("/selected")
     public Result<Void> deleteSelected() {
         cart.deleteSelected(SecurityUtils.currentUserId());
+        return Result.success();
+    }
+
+    @DeleteMapping("/items")
+    public Result<Void> deleteItems(@Valid @RequestBody CartBatchDeleteRequest request) {
+        cart.deleteItems(SecurityUtils.currentUserId(), request.ids());
         return Result.success();
     }
 

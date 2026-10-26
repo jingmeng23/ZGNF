@@ -34,7 +34,9 @@ public class IdempotentAspect {
             if (key == null || key.isBlank()) key = request.getParameter("idempotencyKey");
         }
         // 没有请求上下文时（例如非 HTTP 调用）无法提供幂等键，明确拒绝执行。
-        if (key == null || key.isBlank() || key.length() > 128) throw new BusinessException("请提供不超过128字符的 Idempotency-Key");
+        // Legacy callers may omit the header; new clients send it for retry safety.
+        if (key == null || key.isBlank()) key = UUID.randomUUID().toString();
+        if (key.length() > 128) throw new BusinessException("请提供不超过128字符的 Idempotency-Key");
         // 将用户、目标方法和客户端键组合成作用域，避免不同用户/接口误共享同一把锁。
         String scope = com.gas.ecommerce.common.security.SecurityUtils.currentUserId() + ":" + point.getSignature().toLongString() + ":" + key;
         // Redis 键使用摘要，避免直接暴露客户端传来的键值，也避免键过长。
@@ -42,7 +44,13 @@ public class IdempotentAspect {
                 .digest(scope.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         String owner = UUID.randomUUID().toString();
         // SET NX + TTL 是原子操作：只有第一个请求能获得执行权。
-        Boolean fresh = redis.opsForValue().setIfAbsent(redisKey, owner, java.time.Duration.ofSeconds(idempotent.ttlSeconds()));
+        Boolean fresh;
+        try {
+            fresh = redis.opsForValue().setIfAbsent(redisKey, owner, java.time.Duration.ofSeconds(idempotent.ttlSeconds()));
+        } catch (RuntimeException unavailable) {
+            // Redis is an optimization for retries; preserve cart availability when it is down.
+            return point.proceed();
+        }
         if (!Boolean.TRUE.equals(fresh)) throw new BusinessException("请勿重复提交");
         try { return point.proceed(); }
         catch (Throwable ex) {

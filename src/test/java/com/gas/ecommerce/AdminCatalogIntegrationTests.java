@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -430,7 +430,7 @@ class AdminCatalogIntegrationTests {
                         .content(json.writeValueAsString(Map.of("productId", product, "quantity", 1))))
                 .andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/cart").header("Authorization", userBearer))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].available").value(false))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.invalidItems[0].available").value(false))
                 .andExpect(jsonPath("$.data.selectedAmount").value(0));
         db.update("INSERT INTO " + "\u0060user\u0060" + "(id,status) VALUES(7,'active')");
         mvc.perform(get("/api/v1/cart").header("Authorization", bearer)).andExpect(status().isForbidden());
@@ -484,13 +484,43 @@ class AdminCatalogIntegrationTests {
                         .content(json.writeValueAsString(Map.of("productId", product, "quantity", 1))))
                 .andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/cart").header("Authorization", userBearer))
-                .andExpect(jsonPath("$.data.items[0].available").value(false))
+                .andExpect(jsonPath("$.data.invalidItems[0].available").value(false))
                 .andExpect(jsonPath("$.data.selectedAmount").value(0));
         mvc.perform(put("/api/v1/cart/selection").header("Authorization", userBearer)
                         .contentType("application/json").content("{}")).andExpect(status().isBadRequest());
         db.update("UPDATE " + "\u0060user\u0060" + " SET status='inactive' WHERE id=100");
         mvc.perform(get("/api/v1/cart").header("Authorization", userBearer)).andExpect(status().isBadRequest());
         mvc.perform(delete("/api/v1/cart").header("Authorization", userBearer)).andExpect(status().isBadRequest());
+    }
+
+    @Test void cartPaginatesMarksPriceChangesSeparatesInvalidItemsAndDeletesByIds() throws Exception {
+        long category = category(0, "Cart page");
+        long first = product(category), second = product(category);
+        setProductStatus(first, "on_sale", 200);
+        setProductStatus(second, "on_sale", 200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,10,0),(?,10,0)", first, second);
+        mvc.perform(post("/api/v1/cart/items").header("Authorization", userBearer).contentType("application/json")
+                        .content(json.writeValueAsString(Map.of("productId", first, "quantity", 2))))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/cart/items").header("Authorization", userBearer).contentType("application/json")
+                        .content(json.writeValueAsString(Map.of("productId", second, "quantity", 1))))
+                .andExpect(status().isOk());
+        db.update("UPDATE cart_item SET price_snapshot=100 WHERE user_id=100 AND product_id=?", first);
+        db.update("UPDATE product SET price=75 WHERE id=?", first);
+        long firstItem = db.queryForObject("SELECT id FROM cart_item WHERE user_id=100 AND product_id=?", Long.class, first);
+        long secondItem = db.queryForObject("SELECT id FROM cart_item WHERE user_id=100 AND product_id=?", Long.class, second);
+        mvc.perform(get("/api/v1/cart?page=1&size=1").header("Authorization", userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.total").value(2)).andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.selectedQuantity").value(3))
+                .andExpect(jsonPath("$.data.selectedAmount").value(250));
+        mvc.perform(get("/api/v1/cart?page=2&size=1").header("Authorization", userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].priceChanged").value(true));
+        mvc.perform(delete("/api/v1/cart/items").header("Authorization", userBearer).contentType("application/json")
+                        .content(json.writeValueAsString(Map.of("ids", java.util.List.of(firstItem, secondItem)))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/cart").header("Authorization", userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalQuantity").value(0));
     }
 
     @Test void orderCreationSnapshotsDataReservesStockAndIsIdempotent() throws Exception {

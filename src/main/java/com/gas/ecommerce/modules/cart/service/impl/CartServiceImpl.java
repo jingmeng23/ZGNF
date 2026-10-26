@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.gas.ecommerce.common.exception.BusinessException;
 import com.gas.ecommerce.modules.cart.dto.CartAddRequest;
+import com.gas.ecommerce.modules.cart.dto.CartQuery;
 import com.gas.ecommerce.modules.cart.entity.CartItem;
 import com.gas.ecommerce.modules.cart.mapper.CartItemMapper;
 import com.gas.ecommerce.modules.cart.service.CartService;
@@ -23,6 +24,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * 购物车服务实现。
@@ -44,13 +47,15 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     private final ProductMapper products;    // 商品表访问：用于校验上架状态、取名称/价格/封面
     private final InventoryMapper inventory; // 库存表访问：用于计算可用库存 = quantity - lockedQuantity
     private final ProductBrowseService browse; // 类目浏览服务：用于判断商品类目是否对用户可见
+    private final MeterRegistry metrics;
 
     public CartServiceImpl(UserMapper users, ProductMapper products, InventoryMapper inventory,
-            ProductBrowseService browse) {
+            ProductBrowseService browse, MeterRegistry metrics) {
         this.users = users;
         this.products = products;
         this.inventory = inventory;
         this.browse = browse;
+        this.metrics = metrics;
     }
 
     /**
@@ -61,6 +66,12 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     public CartVO getCart(Long userId) {
         ensureActiveUser(userId);   // 普通查询，不加锁
         return buildCart(userId);
+    }
+
+    @Override
+    public CartVO getCart(Long userId, CartQuery query) {
+        ensureActiveUser(userId);
+        return buildCart(userId, query.pageValue(), query.sizeValue());
     }
 
     /**
@@ -76,13 +87,16 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     @Override
     @Transactional
     public CartVO add(Long userId, CartAddRequest request) {
+        Timer.Sample sample = Timer.start(metrics);
+        boolean added = false;
+        try {
         lockActiveUser(userId);                     // SELECT ... FOR UPDATE 用户行，阻塞同一用户的其他写请求
         validateQuantity(request.quantity());       // 入参数量合法性：1~999
         Product product = requirePurchasable(request.productId()); // 商品不可买则直接抛异常，事务回滚
 
         // 查找当前用户购物车中是否已有该商品（逻辑删除的记录不会被查到）
         CartItem item = getOne(Wrappers.<CartItem>lambdaQuery()
-                .eq(CartItem::getUserId, userId).eq(CartItem::getProductId, product.getId()));
+                .eq(CartItem::getUserId, userId).eq(CartItem::getProductId, product.getId()), true);
         int newQuantity = request.quantity() + (item == null ? 0 : item.getQuantity()); // 累加后的数量
         validateQuantity(newQuantity);              // 累加后仍不能超过上限
         ensureStock(product.getId(), newQuantity);  // 可用库存不足则拒绝（不占库存）
@@ -91,13 +105,16 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
             // 已存在：直接覆盖为新数量，并强制设为选中（用户主动加购视为要买）
             item.setQuantity(newQuantity);
             item.setSelected(true);
+            item.setPriceSnapshot(product.getPrice());
+            item.setProductNameSnapshot(product.getName());
+            item.setCoverSnapshot(product.getCoverUrl());
             updateById(item);
         } else {
             // 不存在：先查是否有被逻辑删除的同商品记录（用户曾经删过它）
             CartItem deleted = baseMapper.selectDeleted(userId, product.getId());
             if (deleted != null) {
                 // 有则复活（以本次请求的数量为准），避免重复插入、保留历史位置
-                if (baseMapper.restore(deleted.getId(), request.quantity()) != 1)
+                if (baseMapper.restore(deleted.getId(), request.quantity(), product.getPrice(), product.getName(), product.getCoverUrl()) != 1)
                     throw new BusinessException("购物车商品恢复失败");
             } else {
                 // 完全没有记录：新增一行
@@ -106,10 +123,18 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
                 item.setProductId(product.getId());
                 item.setQuantity(request.quantity());
                 item.setSelected(true);
+                item.setPriceSnapshot(product.getPrice());
+                item.setProductNameSnapshot(product.getName());
+                item.setCoverSnapshot(product.getCoverUrl());
                 save(item);
             }
         }
+        added = true;
         return buildCart(userId);
+        } finally {
+            sample.stop(metrics.timer("shopping.cart.write", "operation", "add"));
+            if (added) metrics.counter("shopping.cart.add", "result", "success").increment();
+        }
     }
 
     /**
@@ -119,14 +144,25 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     @Override
     @Transactional
     public CartVO updateQuantity(Long userId, Long itemId, Integer quantity) {
+        Timer.Sample sample = Timer.start(metrics);
+        boolean updated = false;
+        try {
         lockActiveUser(userId);
         validateQuantity(quantity);
         CartItem item = requireOwnedItem(userId, itemId);          // 不属于该用户则抛“购物车商品不存在”
         Product product = requirePurchasable(item.getProductId()); // 商品下架后不允许再加数量
         ensureStock(product.getId(), quantity);
         item.setQuantity(quantity);
+        item.setPriceSnapshot(product.getPrice());
+        item.setProductNameSnapshot(product.getName());
+        item.setCoverSnapshot(product.getCoverUrl());
         updateById(item);
+        updated = true;
         return buildCart(userId);
+        } finally {
+            sample.stop(metrics.timer("shopping.cart.write", "operation", "quantity"));
+            if (updated) metrics.counter("shopping.cart.quantity_update", "result", "success").increment();
+        }
     }
 
     /** 切换单件商品的选中状态。不改数量、不校验库存（取消勾选允许缺货商品保持勾选态，由结算页二次拦截）。 */
@@ -171,6 +207,15 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
                 .eq(CartItem::getSelected, true));
     }
 
+    @Override
+    @Transactional
+    public void deleteItems(Long userId, List<Long> ids) {
+        lockActiveUser(userId);
+        if (ids == null || ids.isEmpty() || ids.size() > 100)
+            throw new BusinessException("批量删除商品数量无效");
+        remove(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getUserId, userId).in(CartItem::getId, ids));
+    }
+
     /** 清空购物车（通常在下单成功后调用）。 */
     @Override
     @Transactional
@@ -183,30 +228,44 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     // 核心组装方法：把 cart_item + product + inventory + 类目 拼成前端可直接渲染的 VO
     // ─────────────────────────────────────────
     private CartVO buildCart(Long userId) {
+        return buildCart(userId, 1, Integer.MAX_VALUE);
+    }
+
+    private CartVO buildCart(Long userId, int page, int size) {
         // 1. 拉取该用户全部购物车明细，按更新时间与 ID 倒序（最近操作的排前面）
         List<CartItem> items = list(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getUserId, userId)
                 .orderByDesc(CartItem::getUpdateTime).orderByDesc(CartItem::getId));
-        if (items.isEmpty()) return new CartVO(List.of(), 0, 0, BigDecimal.ZERO);
+        if (items.isEmpty()) return new CartVO(List.of(), List.of(), 0, page, size, 0, 0, BigDecimal.ZERO);
 
         List<Long> productIds = items.stream().map(CartItem::getProductId).distinct().toList();
 
         // 2. 批量查商品（避免循环内查库造成 N+1）
-        Map<Long, Product> productById = products.selectList(Wrappers.<Product>lambdaQuery()
-                        .in(Product::getId, productIds)).stream()
-                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        Map<Long, Product> productById;
+        boolean productServiceAvailable = true;
+        try {
+            productById = products.selectList(Wrappers.<Product>lambdaQuery().in(Product::getId, productIds)).stream()
+                    .collect(Collectors.toMap(Product::getId, Function.identity()));
+        } catch (RuntimeException unavailable) {
+            productById = Map.of();
+            productServiceAvailable = false;
+            metrics.counter("shopping.cart.product_fallback").increment();
+        }
 
         // 3. 批量查库存，按商品汇总可用库存 = quantity - lockedQuantity（多仓库合并）
         Map<Long, Long> stockByProduct = new HashMap<>();
-        Set<Long> visibleCategories = browse.categories().stream()
-                .map(c -> c.id()).collect(Collectors.toSet()); // 对用户可见的类目集合（如下架/隐藏类目不在此列）
-        for (Inventory stock : inventory.selectList(Wrappers.<Inventory>lambdaQuery()
-                .in(Inventory::getProductId, productIds))) {
-            long availableStock = Math.max(0L, (long) stock.getQuantity() - stock.getLockedQuantity());
-            stockByProduct.merge(stock.getProductId(), availableStock, Long::sum);
-        }
+        Set<Long> visibleCategories;
+        try { visibleCategories = browse.categories().stream().map(c -> c.id()).collect(Collectors.toSet()); }
+        catch (RuntimeException unavailable) { visibleCategories = Set.of(); productServiceAvailable = false; }
+        try {
+            for (Inventory stock : inventory.selectList(Wrappers.<Inventory>lambdaQuery().in(Inventory::getProductId, productIds))) {
+                long availableStock = Math.max(0L, (long) stock.getQuantity() - stock.getLockedQuantity());
+                stockByProduct.merge(stock.getProductId(), availableStock, Long::sum);
+            }
+        } catch (RuntimeException unavailable) { productServiceAvailable = false; }
 
         // 4. 逐条组装 VO，同时判定可用性与累计金额
-        List<CartItemVO> views = new ArrayList<>();
+        List<CartItemVO> validViews = new ArrayList<>();
+        List<CartItemVO> invalidViews = new ArrayList<>();
         int totalQuantity = 0;          // 购物车总件数（含未选中、含缺货）
         int selectedQuantity = 0;       // 已选且可用的件数（用于结算栏“已选 X 件”）
         BigDecimal selectedAmount = BigDecimal.ZERO; // 已选且可用的应付金额
@@ -215,15 +274,19 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
             long availableStock = stockByProduct.getOrDefault(item.getProductId(), 0L);
 
             // 四条条件全部满足才算「可购买」：商品存在、上架中、类目可见、库存够
-            boolean available = product != null && "on_sale".equals(product.getStatus())
+            boolean available = productServiceAvailable && product != null && "on_sale".equals(product.getStatus())
                     && visibleCategories.contains(product.getCategoryId()) && availableStock >= item.getQuantity();
 
-            BigDecimal unitPrice = product == null ? BigDecimal.ZERO : product.getPrice();
+            boolean degraded = !productServiceAvailable || product == null;
+            BigDecimal unitPrice = product == null ? Objects.requireNonNullElse(item.getPriceSnapshot(), BigDecimal.ZERO) : product.getPrice();
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(item.getQuantity()));
 
-            views.add(new CartItemVO(item.getId(), item.getProductId(), product == null ? null : product.getName(),
-                    product == null ? null : product.getCoverUrl(), item.getQuantity(), unitPrice,
-                    availableStock, item.getSelected(), available, subtotal));
+            boolean priceChanged = product != null && item.getPriceSnapshot() != null
+                    && item.getPriceSnapshot().compareTo(unitPrice) != 0;
+            CartItemVO view = new CartItemVO(item.getId(), item.getProductId(), product == null ? item.getProductNameSnapshot() : product.getName(),
+                    product == null ? item.getCoverSnapshot() : product.getCoverUrl(), item.getQuantity(), unitPrice,
+                    availableStock, item.getSelected(), available, subtotal, priceChanged, degraded);
+            (available ? validViews : invalidViews).add(view);
 
             totalQuantity += item.getQuantity();
             // 只有「可用且被勾选」的商品才计入结算金额，防止用户为下架/缺货商品付款
@@ -232,7 +295,11 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
                 selectedAmount = selectedAmount.add(subtotal);
             }
         }
-        return new CartVO(List.copyOf(views), totalQuantity, selectedQuantity, selectedAmount);
+        metrics.counter("shopping.cart.view", "result", "success").increment();
+        int from = (int) Math.min(validViews.size(), (long) (page - 1) * size);
+        int to = Math.min(validViews.size(), from + size);
+        return new CartVO(List.copyOf(validViews.subList(from, to)), List.copyOf(invalidViews),
+                validViews.size(), page, size, totalQuantity, selectedQuantity, selectedAmount);
     }
 
     // ─────────────────────────────────────────
@@ -276,7 +343,7 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
      */
     private CartItem requireOwnedItem(Long userId, Long itemId) {
         CartItem item = getOne(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getId, itemId)
-                .eq(CartItem::getUserId, userId));
+                .eq(CartItem::getUserId, userId), true);
         if (item == null) throw new BusinessException("购物车商品不存在");
         return item;
     }

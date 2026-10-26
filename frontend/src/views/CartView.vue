@@ -1,26 +1,36 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { ShoppingBag, Minus, Plus } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { ShoppingBag, Minus, Plus, Trash2 } from 'lucide-vue-next'
 import { useCartStore } from '../stores/cart'
 import { addressApi, orderApi } from '../api/commerce'
-import type { UserAddress } from '../api/types'
+import type { CartItem, UserAddress } from '../api/types'
 import { demoMode } from '../api/catalog'
 import { session } from '../platform/session'
 import ApplianceArt from '../components/ApplianceArt.vue'
 const cart = useCartStore()
 const addresses = ref<UserAddress[]>([]), addressId = ref(''), busy = ref(false), message = ref('')
+const selectedAll = computed(() => cart.items.length > 0 && cart.items.every(item => item.selected))
 async function checkout() {
   if (demoMode) { message.value = '演示模式不创建真实订单'; return }
   if (!session.read()) { message.value = '请先登录后再提交订单'; return }
   busy.value = true; message.value = ''
-  try { if (!addresses.value.length) addresses.value = await addressApi.list(); if (!addressId.value) addressId.value = addresses.value.find(a => a.isDefault)?.id || addresses.value[0]?.id || ''; if (!addressId.value) { message.value = '请先在个人中心添加收货地址'; return }; await orderApi.create(addressId.value); await cart.refresh(); message.value = '订单已创建'; }
-  catch (e) { message.value = (e as Error).message } finally { busy.value = false }
+  try { if (!addresses.value.length) addresses.value = await addressApi.list(); if (!addressId.value) addressId.value = addresses.value.find(a => a.isDefault)?.id || addresses.value[0]?.id || ''; if (!addressId.value) { message.value = '请先添加收货地址'; return }; await orderApi.create(addressId.value); await cart.refresh(1); message.value = '订单已创建' }
+  catch (e) { message.value = (e as Error).message; await cart.refresh(1) } finally { busy.value = false }
 }
-onMounted(() => { if (!demoMode && session.read()) void cart.refresh() })
+async function changeSelection(item: CartItem, selected: boolean) { try { await cart.select(item.id, selected) } catch (e) { message.value = (e as Error).message } }
+async function removeInvalid() { try { await cart.removeMany(cart.cart.invalidItems.map(item => item.id)) } catch (e) { message.value = (e as Error).message } }
+onMounted(() => { if (!demoMode && session.read()) void cart.refresh(1) })
 </script>
 <template>
-  <header class="page-heading"><span class="eyebrow">YOUR HOME ESSENTIALS</span><h1>购物车 <small>{{ cart.count }} 件商品</small></h1><p>确认商品和数量后即可提交订单。</p></header>
+  <header class="page-heading"><span class="eyebrow">YOUR HOME ESSENTIALS</span><h1>购物车 <small>{{ cart.count }} 件商品</small></h1><p>商品价格和库存以提交订单时的服务端校验为准。</p></header>
   <p v-if="cart.busy" class="state" role="status">正在加载购物车...</p>
-  <p v-else-if="!cart.items.length" class="state">购物车还是空的，去看看精选商品吧。<RouterLink to="/catalog" class="button">逛逛商城</RouterLink></p>
-  <template v-else><div class="cart-list"><article v-for="item in cart.items" :key="item.id" class="cart-row"><ApplianceArt :kind="item.productId" /><div class="cart-description"><h3>{{ item.productName }}</h3><strong>¥{{ item.unitPrice.toFixed(2) }}</strong></div><div class="stepper"><button :aria-label="`减少${item.productName}数量`" @click="cart.change(item.id, -1)"><Minus :size="15" /></button><span>{{ item.quantity }}</span><button :aria-label="`增加${item.productName}数量`" :disabled="item.quantity >= item.availableStock" @click="cart.change(item.id, 1)"><Plus :size="15" /></button></div></article></div><div class="cart-summary"><div>合计 <strong>¥{{ (cart.totalCents / 100).toFixed(2) }}</strong><small>金额以提交订单时后端计算为准</small></div><button class="button" :disabled="busy" @click="checkout">{{ busy ? '提交中...' : '提交订单' }}</button></div><p v-if="message" class="inline-notice" role="status">{{ message }}</p></template>
+  <p v-else-if="!cart.items.length && !cart.cart.invalidItems.length" class="state">购物车还是空的，去看看精选商品吧。<RouterLink to="/catalog" class="button">逛逛商城</RouterLink></p>
+  <template v-else>
+    <div class="cart-list"><div class="cart-toolbar"><label><input type="checkbox" :checked="selectedAll" @change="cart.selectAll(($event.target as HTMLInputElement).checked)" /> 全选</label><button class="button secondary" @click="cart.removeSelected"><Trash2 :size="16" /> 删除选中</button><button class="button secondary" @click="cart.clear"><Trash2 :size="16" /> 清空</button></div>
+      <article v-for="item in cart.items" :key="item.id" class="cart-row"><input type="checkbox" :checked="item.selected" @change="changeSelection(item, ($event.target as HTMLInputElement).checked)" /><ApplianceArt :kind="item.productId" /><div class="cart-description"><h3>{{ item.productName }}</h3><strong>¥{{ item.unitPrice.toFixed(2) }}</strong><p v-if="item.priceChanged" class="error-message">价格已变更</p><p>小计 ¥{{ item.subtotal.toFixed(2) }}</p></div><div class="stepper"><button :aria-label="`减少${item.productName}数量`" @click="cart.change(item.id, -1)"><Minus :size="15" /></button><span>{{ item.quantity }}</span><button :aria-label="`增加${item.productName}数量`" :disabled="item.quantity >= item.availableStock" @click="cart.change(item.id, 1)"><Plus :size="15" /></button></div></article>
+      <div v-if="cart.cart.total > cart.items.length" class="pagination"><button class="button secondary" :disabled="cart.cart.page <= 1" @click="cart.refresh(cart.cart.page - 1)">上一页</button><span>{{ cart.cart.page }} / {{ Math.max(1, Math.ceil(cart.cart.total / cart.cart.size)) }}</span><button class="button secondary" :disabled="cart.cart.page * cart.cart.size >= cart.cart.total" @click="cart.refresh(cart.cart.page + 1)">下一页</button></div>
+    </div>
+    <section v-if="cart.cart.invalidItems.length" class="cart-list invalid-items"><div class="cart-toolbar"><h2>失效商品（{{ cart.cart.invalidItems.length }}）</h2><button class="button secondary" @click="removeInvalid"><Trash2 :size="16" /> 删除失效商品</button></div><article v-for="item in cart.cart.invalidItems" :key="item.id" class="cart-row"><ApplianceArt :kind="item.productId" /><div class="cart-description"><h3>{{ item.productName || '商品已下架' }}</h3><p>{{ item.availableStock ? `库存不足，剩余 ${item.availableStock}` : '商品下架或库存不足' }}</p><strong>¥{{ item.unitPrice.toFixed(2) }}</strong></div><button class="button secondary" @click="cart.change(item.id, -item.quantity)"><Trash2 :size="16" /> 删除</button></article></section>
+    <div class="cart-summary"><div>已选 {{ cart.cart.selectedQuantity }} 件 <strong>¥{{ Number(cart.cart.selectedAmount).toFixed(2) }}</strong><small>结算前将再次校验库存和价格</small></div><button class="button" :disabled="busy || !cart.cart.selectedQuantity" @click="checkout">{{ busy ? '提交中...' : '提交订单' }}</button></div><p v-if="message" class="inline-notice" role="status">{{ message }}</p>
+  </template>
 </template>

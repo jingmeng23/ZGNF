@@ -4,4 +4,4 @@ import java.math.BigDecimal;
 
 public record CartItemVO(Long id, Long productId, String productName, String coverUrl,
         Integer quantity, BigDecimal unitPrice, long availableStock, Boolean selected,
-        boolean available, BigDecimal subtotal) { }
+        boolean available, BigDecimal subtotal, boolean priceChanged, boolean degraded) { }

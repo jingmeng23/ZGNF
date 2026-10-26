@@ -16,6 +16,8 @@ import com.gas.ecommerce.modules.order.entity.Order;
 import com.gas.ecommerce.modules.order.entity.OrderItem;
 import com.gas.ecommerce.modules.order.mapper.*;
 import com.gas.ecommerce.modules.order.service.*;
+import com.gas.ecommerce.modules.inventory.entity.Inventory;
+import com.gas.ecommerce.modules.inventory.mapper.InventoryMapper;
 import com.gas.ecommerce.modules.order.vo.*;
 import com.gas.ecommerce.modules.product.entity.Product;
 import com.gas.ecommerce.modules.product.mapper.CatalogLockMapper;
@@ -31,6 +33,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.micrometer.core.instrument.MeterRegistry;
 
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
@@ -40,6 +43,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final UserAddressMapper addresses;
     private final CartItemMapper cart;
     private final ProductMapper products;
+    private final InventoryMapper inventory;
     private final CatalogLockMapper catalogLock;
     private final ProductBrowseService browse;
     private final OrderItemMapper items;
@@ -47,15 +51,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final OrderNoGenerator numbers;
     private final ObjectMapper json;
     private final String encryptionKey;
+    private final MeterRegistry metrics;
 
     public OrderServiceImpl(com.gas.ecommerce.modules.coupon.service.CouponService coupons, UserMapper users, UserAddressMapper addresses, CartItemMapper cart,
-            ProductMapper products, CatalogLockMapper catalogLock, ProductBrowseService browse,
+            ProductMapper products, InventoryMapper inventory, CatalogLockMapper catalogLock, ProductBrowseService browse,
             OrderItemMapper items, OrderInventoryService stock, OrderNoGenerator numbers, ObjectMapper json,
-            @Value("${app.encryption-key}") String encryptionKey) {
+            @Value("${app.encryption-key}") String encryptionKey, MeterRegistry metrics) {
         this.coupons = coupons; this.users = users; this.addresses = addresses; this.cart = cart;
-        this.products = products; this.catalogLock = catalogLock; this.browse = browse;
+        this.products = products; this.inventory = inventory; this.catalogLock = catalogLock; this.browse = browse;
         this.items = items; this.stock = stock; this.numbers = numbers;
         this.json = json; this.encryptionKey = encryptionKey;
+        this.metrics = metrics;
     }
 
     @Override @Transactional
@@ -85,6 +91,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 throw new BusinessException("商品数量须为 1 至 999");
             if (product.getPrice() == null || product.getPrice().signum() < 0)
                 throw new BusinessException("商品价格异常");
+            long available = inventory.selectList(Wrappers.<Inventory>lambdaQuery()
+                            .eq(Inventory::getProductId, product.getId()))
+                    .stream().mapToLong(row -> Math.max(0L, (long) row.getQuantity() - row.getLockedQuantity())).sum();
+            if (available < cartItem.getQuantity())
+                throw new BusinessException("商品库存不足，请调整购物车数量：" + product.getName());
             OrderItem item = new OrderItem();
             item.setProductId(product.getId()); item.setProductName(product.getName());
             item.setProductImage(product.getCoverUrl()); item.setQuantity(cartItem.getQuantity());
@@ -110,6 +121,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         stock.reserve(order, snapshots);
         cart.delete(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getUserId, userId)
                 .in(CartItem::getId, selected.stream().map(CartItem::getId).toList()));
+        metrics.counter("shopping.cart.checkout", "result", "success").increment();
         return view(order);
     }
 

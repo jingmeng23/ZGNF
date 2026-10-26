@@ -34,6 +34,7 @@ function expired() {
     void router.replace({ path: '/login', query: { redirect: current.fullPath } })
 }
 onMounted(() => window.addEventListener('auth:expired', expired))
+onMounted(() => { if (auth.authenticated) void cart.refresh() })
 onUnmounted(() => window.removeEventListener('auth:expired', expired))
 </script>
 

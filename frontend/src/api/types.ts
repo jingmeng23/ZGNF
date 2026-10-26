@@ -11,5 +11,9 @@ export interface CurrentUser { userId: string }
 // Java Long IDs remain strings to prevent precision loss.
 export interface Product {
   id: string; name: string; subtitle: string; coverUrl: string | null
-  price: number; originalPrice: number; sales: number
+  price: number; originalPrice: number; sales: number; availableStock?: number
 }
+export interface CartItem { id: string; productId: string; productName: string; coverUrl: string | null; quantity: number; unitPrice: number; availableStock: number; selected: boolean; available: boolean; subtotal: number }
+export interface Cart { items: CartItem[]; totalQuantity: number; selectedQuantity: number; selectedAmount: number }
+export interface UserAddress { id: string; receiver: string; phone: string; province: string; city: string; district: string; detail: string; isDefault: boolean }
+export interface Order { id: string; orderNo: string; status: string; totalAmount: number; payAmount: number; createTime: string; items: { productName: string; quantity: number; unitPrice: number }[] }

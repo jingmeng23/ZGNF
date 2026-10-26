@@ -1,23 +1,18 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Product } from '../api/types'
+import type { Cart, Product } from '../api/types'
+import { cartApi } from '../api/commerce'
 import { demoMode } from '../api/catalog'
 
 export const useCartStore = defineStore('cart', () => {
-  const items = ref<{ product: Product; quantity: number }[]>([])
-  const count = computed(() => items.value.reduce((sum, item) => sum + item.quantity, 0))
-  const totalCents = computed(() => items.value.reduce((sum, item) => sum + Math.round(item.product.price * 100) * item.quantity, 0))
-  function add(product: Product) {
-    if (!demoMode) return
-    const item = items.value.find(item => item.product.id === product.id)
-    if (item) item.quantity = Math.min(99, item.quantity + 1)
-    else items.value.push({ product, quantity: 1 })
-  }
-  function change(id: string, delta: number) {
-    const item = items.value.find(item => item.product.id === id)
-    if (!item) return
-    item.quantity = Math.min(99, item.quantity + delta)
-    items.value = items.value.filter(item => item.quantity > 0)
-  }
-  return { items, count, totalCents, add, change }
+  const cart = ref<Cart>({ items: [], totalQuantity: 0, selectedQuantity: 0, selectedAmount: 0 })
+  const busy = ref(false)
+  const demoItems = ref<{ product: Product; quantity: number }[]>([])
+  const items = computed(() => demoMode ? demoItems.value.map(item => ({ id: item.product.id, productId: item.product.id, productName: item.product.name, coverUrl: item.product.coverUrl, quantity: item.quantity, unitPrice: item.product.price, availableStock: 99, selected: true, available: true, subtotal: item.product.price * item.quantity })) : cart.value.items)
+  const count = computed(() => demoMode ? demoItems.value.reduce((sum, item) => sum + item.quantity, 0) : cart.value.totalQuantity)
+  const totalCents = computed(() => demoMode ? demoItems.value.reduce((sum, item) => sum + Math.round(item.product.price * 100) * item.quantity, 0) : Math.round(cart.value.selectedAmount * 100))
+  async function refresh() { if (demoMode) return; busy.value = true; try { cart.value = await cartApi.get() } finally { busy.value = false } }
+  async function add(product: Product) { if (demoMode) { const item = demoItems.value.find(row => row.product.id === product.id); if (item) item.quantity++; else demoItems.value.push({ product, quantity: 1 }); return }; await cartApi.add(product.id); await refresh() }
+  async function change(id: string, delta: number) { if (demoMode) { const item = demoItems.value.find(row => row.product.id === id); if (!item) return; item.quantity += delta; demoItems.value = demoItems.value.filter(row => row.quantity > 0); return }; const item = cart.value.items.find(row => row.id === id); if (!item) return; if (item.quantity + delta <= 0) await cartApi.remove(id); else await cartApi.quantity(id, item.quantity + delta); await refresh() }
+  return { cart, items, count, totalCents, busy, refresh, add, change }
 })

@@ -56,6 +56,8 @@ public class CatalogManagementService {
         lock(); validateReferences(r.categoryId(), r.brandId(), r.price(), r.originalPrice(), false);
         Product p = new Product(); p.setCategoryId(r.categoryId()); p.setBrandId(r.brandId());
         p.setName(r.name().trim()); p.setSubtitle(r.subtitle()); p.setCoverUrl(r.coverUrl());
+        p.setDescription(r.description());
+        p.setDetailImages(r.detailImages() == null ? null : String.join("\n", r.detailImages()));
         p.setPrice(r.price()); p.setOriginalPrice(r.originalPrice()); p.setStatus("draft"); p.setSales(0L); p.setIsDeleted(0);
         products.insert(p); return product(p.getId());
     }
@@ -68,6 +70,7 @@ public class CatalogManagementService {
         products.update(null, new UpdateWrapper<Product>().eq("id", id)
                 .set("category_id", r.categoryId()).set("brand_id", r.brandId()).set("name", r.name().trim())
                 .set("subtitle", r.subtitle()).set("cover_url", r.coverUrl()).set("price", r.price())
+                .set("description", r.description()).set("detail_images", r.detailImages() == null ? null : String.join("\n", r.detailImages()))
                 .set("original_price", r.originalPrice()).set("update_time", java.time.LocalDateTime.now()));
         return product(id);
     }
@@ -178,6 +181,7 @@ public class CatalogManagementService {
             stocks.merge(i.getProductId(), Math.max(0L, (long) i.getQuantity() - i.getLockedQuantity()), Long::sum);
         return list.stream().map(p -> new AdminProductVO(p.getId(), p.getCategoryId(), names.get(p.getCategoryId()),
                 p.getBrandId(), p.getName(), p.getSubtitle(), p.getCoverUrl(), p.getPrice(), p.getOriginalPrice(),
-                p.getStatus(), p.getSales(), stocks.getOrDefault(p.getId(), 0L), p.getCreateTime(), p.getUpdateTime())).toList();
+                p.getStatus(), p.getSales(), stocks.getOrDefault(p.getId(), 0L), p.getCreateTime(), p.getUpdateTime(),
+                p.getDescription(), p.getDetailImages() == null || p.getDetailImages().isBlank() ? List.of() : Arrays.asList(p.getDetailImages().split("\\n")))).toList();
     }
 }

@@ -37,6 +37,11 @@ export const router = createRouter({
       meta: { title: '好物商城' },
     },
     {
+      path: '/products/:id',
+      component: () => import('../views/ProductDetailView.vue'),
+      meta: { title: '商品详情' },
+    },
+    {
       path: '/services',
       component: () => import('../views/ServicesView.vue'),
       meta: { title: '安心服务' },

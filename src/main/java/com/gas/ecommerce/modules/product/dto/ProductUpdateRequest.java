@@ -11,4 +11,6 @@ public record ProductUpdateRequest(
         @Size(max = 500) String subtitle,
         @Size(max = 512) String coverUrl,
         @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal price,
-        @DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal originalPrice) { }
+        @DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal originalPrice,
+        @Size(max = 16000) String description,
+        @Size(max = 20) java.util.List<@NotBlank @Size(max = 512) @Pattern(regexp = "^(https?://|/(?!/))[^\\r\\n]*$") String> detailImages) { }

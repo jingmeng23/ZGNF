@@ -51,7 +51,10 @@ public class ProductBrowseService {
             }
         }
         if (categoryIds.isEmpty()) return empty(request);
-        var query = Wrappers.<Product>lambdaQuery().eq(Product::getStatus, "on_sale")
+        var query = Wrappers.<Product>lambdaQuery().select(Product::getId, Product::getCategoryId,
+                        Product::getName, Product::getSubtitle, Product::getCoverUrl, Product::getPrice,
+                        Product::getOriginalPrice, Product::getSales, Product::getCreateTime)
+                .eq(Product::getStatus, "on_sale")
                 .in(Product::getCategoryId, categoryIds)
                 .like(request.getKeyword() != null && !request.getKeyword().isBlank(),
                         Product::getName, request.getKeyword() == null ? null : request.getKeyword().trim());
@@ -64,7 +67,7 @@ public class ProductBrowseService {
         }
         if (!"id".equals(sort)) query.orderByDesc(Product::getId);
         Page<Product> page = products.selectPage(new Page<>(request.getPage(), request.getSize()), query);
-        return new PageResult<>(views(page.getRecords()), page.getTotal(), page.getCurrent(), page.getSize(), page.getPages());
+        return new PageResult<>(views(page.getRecords(), false), page.getTotal(), page.getCurrent(), page.getSize(), page.getPages());
     }
 
     public Optional<ProductVO> product(Long id) {
@@ -72,7 +75,7 @@ public class ProductBrowseService {
         if (product == null || !"on_sale".equals(product.getStatus())) return Optional.empty();
         boolean visibleCategory = categories().stream().anyMatch(c -> c.id().equals(product.getCategoryId()));
         if (!visibleCategory) return Optional.empty();
-        return Optional.of(views(List.of(product)).getFirst());
+        return Optional.of(views(List.of(product), true).getFirst());
     }
 
     private PageResult<ProductVO> empty(ProductQueryRequest request) {
@@ -91,7 +94,7 @@ public class ProductBrowseService {
         return true;
     }
 
-    private List<ProductVO> views(List<Product> list) {
+    private List<ProductVO> views(List<Product> list, boolean includeDetails) {
         if (list.isEmpty()) return List.of();
         List<Long> ids = list.stream().map(Product::getId).toList();
         Map<Long, Long> stocks = new HashMap<>();
@@ -101,6 +104,8 @@ public class ProductBrowseService {
         }
         return list.stream().map(p -> new ProductVO(p.getId(), p.getCategoryId(), p.getName(), p.getSubtitle(),
                 p.getCoverUrl(), p.getPrice(), p.getOriginalPrice(), p.getSales(),
-                stocks.getOrDefault(p.getId(), 0L))).toList();
+                stocks.getOrDefault(p.getId(), 0L), includeDetails ? p.getDescription() : null,
+                !includeDetails || p.getDetailImages() == null || p.getDetailImages().isBlank()
+                        ? List.of() : Arrays.asList(p.getDetailImages().split("\n")))).toList();
     }
 }

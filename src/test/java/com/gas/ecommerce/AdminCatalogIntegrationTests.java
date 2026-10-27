@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -203,10 +203,19 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get("/api/v1/admin/products/" + product).header("Authorization", bearer))
                 .andExpect(jsonPath("$.data.stock").value(7));
         mvc.perform(put("/api/v1/admin/products/" + product).header("Authorization", bearer).contentType("application/json")
-                        .content(json.writeValueAsString(Map.of("categoryId", category, "name", "New stove", "price", 99))))
+                        .content(json.writeValueAsString(Map.of("categoryId", category, "name", "New stove", "price", 99,
+                                "description", "Reliable stove details", "detailImages", java.util.List.of("https://img.example/detail-1.jpg")))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("New stove"))
+                .andExpect(jsonPath("$.data.description").value("Reliable stove details"))
+                .andExpect(jsonPath("$.data.detailImages[0]").value("https://img.example/detail-1.jpg"))
                 .andExpect(jsonPath("$.data.originalPrice").doesNotExist());
         setProductStatus(product, "on_sale", 200);
+        mvc.perform(get("/api/v1/products/" + product))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.description").value("Reliable stove details"))
+                .andExpect(jsonPath("$.data.detailImages[0]").value("https://img.example/detail-1.jpg"));
+        mvc.perform(get("/api/v1/products").param("keyword", "New stove"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].description").doesNotExist())
+                .andExpect(jsonPath("$.data.list[0].detailImages.length()").value(0));
         mvc.perform(delete("/api/v1/admin/products/" + product).header("Authorization", bearer)).andExpect(status().isBadRequest());
         mvc.perform(delete("/api/v1/admin/categories/" + category).header("Authorization", bearer)).andExpect(status().isBadRequest());
         setProductStatus(product, "off_sale", 200);

@@ -10,9 +10,11 @@ export interface LoginResponse { accessToken: string; refreshToken: string; expi
 export interface CurrentUser { userId: string }
 // Java Long IDs remain strings to prevent precision loss.
 export interface Product {
+  categoryId?: string; description?: string | null; detailImages?: string[]
   id: string; name: string; subtitle: string; coverUrl: string | null
-  price: number; originalPrice: number; sales: number; availableStock?: number
+  price: number; originalPrice: number | null; sales: number; availableStock?: number
 }
+export interface Category { id: string; parentId: string; name: string; sort: number; status: string }
 export interface CartItem { id: string; productId: string; productName: string; coverUrl: string | null; quantity: number; unitPrice: number; availableStock: number; selected: boolean; available: boolean; subtotal: number; priceChanged: boolean; degraded?: boolean }
 export interface Cart { items: CartItem[]; invalidItems: CartItem[]; total: number; page: number; size: number; totalQuantity: number; selectedQuantity: number; selectedAmount: number }
 export interface UserAddress { id: string; receiver: string; phone: string; province: string; city: string; district: string; detail: string; isDefault: boolean }

@@ -73,9 +73,12 @@ export const router = createRouter({
   ],
 })
 router.beforeEach((to) => {
+  const localManagementBypass = import.meta.env.DEV && import.meta.env.VITE_LOCAL_MANAGEMENT_BYPASS !== 'false'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+    && ['employees', 'roles'].includes(String(to.params.module))
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (to.params.module && !Object.hasOwn(modules, String(to.params.module))) return '/admin'
-    if (!adminDemoMode && !hasAdminAccess())
+    if (!localManagementBypass && !adminDemoMode && !hasAdminAccess())
       return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
   if (to.meta.requiresAuth && !session.read())

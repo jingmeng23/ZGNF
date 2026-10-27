@@ -18,4 +18,4 @@ export const adminApi = {
   },
 }
 
-export const adminDemoMode = import.meta.env.VITE_DEMO_MODE !== 'false'
+export const adminDemoMode = import.meta.env.VITE_DEMO_MODE === 'true'

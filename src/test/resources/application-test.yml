@@ -1,4 +1,6 @@
 app:
+  security:
+    local-management-bypass: false
   addresses:
     require-region-codes-at-checkout: false
   payments:

@@ -239,9 +239,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
     private OrderVO view(Order order, List<OrderItem> orderItems) {
         OrderAddressVO address = readAddress(order.getAddressSnapshot());
-        if (address != null) address = new OrderAddressVO(address.receiver(),
-                EncryptUtils.decryptAes(address.phone(), encryptionKey), address.province(),
-                address.city(), address.district(), address.detail());
+        if (address != null) address = address.withPhone(EncryptUtils.decryptAes(address.phone(), encryptionKey));
         return new OrderVO(order.getId(), order.getUserId(), order.getOrderNo(), order.getStatus(),
                 order.getTotalAmount(), order.getPayAmount(), order.getUserCouponId(), order.getDiscountAmount(), order.getRemark(), order.getCreateTime(),
                 order.getExpireTime(), address, orderItems.stream().map(i -> new OrderItemVO(i.getProductId(),

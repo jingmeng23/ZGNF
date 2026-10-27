@@ -18,6 +18,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 异常或错误码类型，用于统一表达程序处理失败的原因。
  */
 public class GlobalExceptionHandler {
+    @ExceptionHandler(com.gas.ecommerce.modules.user.service.AddressDuplicateException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Result<Void> duplicateAddress(com.gas.ecommerce.modules.user.service.AddressDuplicateException ex) {
+        return Result.of(409002,ex.getMessage(),null);
+    }
     @ExceptionHandler(com.gas.ecommerce.modules.order.service.CheckoutUnavailableException.class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public Result<Void> checkoutUnavailable(com.gas.ecommerce.modules.order.service.CheckoutUnavailableException ex) {

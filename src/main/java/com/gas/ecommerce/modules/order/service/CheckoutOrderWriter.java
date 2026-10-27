@@ -71,7 +71,7 @@ public class CheckoutOrderWriter {
         order.setFullReductionAmount(quote.marketing().fullReductionAmount()); order.setCouponDiscountAmount(quote.marketing().couponAmount());
         order.setUserCouponId(request.userCouponId()); order.setExpireTime(LocalDateTime.now().plusMinutes(30));
         var address=quote.address().address();
-        try { order.setAddressSnapshot(json.writeValueAsString(new OrderAddressVO(address.getReceiver(),address.getPhone(),address.getProvince(),address.getCity(),address.getDistrict(),address.getDetail()))); }
+        try { order.setAddressSnapshot(json.writeValueAsString(new OrderAddressVO(address.getReceiver(),address.getPhone(),address.getProvince(),address.getCity(),address.getDistrict(),address.getDetail(),address.getProvinceCode(),address.getCityCode(),address.getDistrictCode(),address.getLatitude(),address.getLongitude()))); }
         catch (com.fasterxml.jackson.core.JsonProcessingException ex) { throw new IllegalStateException(ex); }
         orders.insert(order);
         for (var item : quote.items()) { item.setOrderId(order.getId()); items.insert(item); }

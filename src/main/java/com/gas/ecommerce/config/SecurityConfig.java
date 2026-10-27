@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                          .requestMatchers("/api/v1/coupons", "/api/v1/coupons/**", "/api/v1/user-coupons", "/api/v1/user-coupons/**").hasRole("USER")
                          .requestMatchers("/api/v1/work-orders", "/api/v1/work-orders/**").hasRole("USER")
+                        .requestMatchers("/api/v1/users/me/addresses", "/api/v1/users/me/addresses/**").hasRole("USER")
                         .requestMatchers("/api/v1/cart", "/api/v1/cart/**").hasRole("USER")
                         .requestMatchers("/api/v1/payments", "/api/v1/payments/**").hasRole("USER")
                         .requestMatchers("/api/v1/orders", "/api/v1/orders/**").hasRole("USER")

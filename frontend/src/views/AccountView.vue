@@ -19,6 +19,7 @@ const auth = useAuthStore()
     ><button v-else class="button secondary" @click="auth.logout">退出登录</button>
   </section>
   <div class="panel account-links">
+    <RouterLink to="/addresses"><span>收货地址<small>管理地址与地图选点</small></span><ArrowRight :size="18" /></RouterLink>
     <RouterLink to="/favorites"
       ><span>我的收藏<small>收藏的安心好物</small></span></RouterLink
     ><RouterLink to="/history"

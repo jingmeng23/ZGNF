@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -935,7 +935,7 @@ class AdminCatalogIntegrationTests {
     }
     String addressBody(String phone, boolean makeDefault) throws Exception {
         return json.writeValueAsString(Map.of("receiver", "张三", "phone", phone, "province", "四川省",
-                "city", "自贡市", "district", "自流井区", "detail", "汇东路 1 号", "isDefault", makeDefault));
+                "city", "自贡市", "district", "自流井区", "detail", "汇东路 1 号", "isDefault", makeDefault, "allowDuplicate", true));
     }
     String categoryBody(long parent, String name, String state) throws Exception {
         return json.writeValueAsString(Map.of("parentId", parent, "name", name, "sort", 0, "status", state));
@@ -1504,6 +1504,79 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get("/api/v1/orders/900").header("Authorization",userBearer)).andExpect(status().isBadRequest());
         mvc.perform(put("/api/v1/orders/900/cancel").header("Authorization",userBearer)).andExpect(status().isBadRequest());
         mvc.perform(put("/api/v1/orders/900/confirm-receipt").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+    }
+
+    private void addressRegions() throws Exception {
+        var rows=java.util.List.of(
+            new com.gas.ecommerce.modules.user.service.AddressRegionService.Region("510000",null,"\u56db\u5ddd\u7701",1,true,null,"v1"),
+            new com.gas.ecommerce.modules.user.service.AddressRegionService.Region("510300","510000","\u81ea\u8d21\u5e02",2,true,null,"v1"),
+            new com.gas.ecommerce.modules.user.service.AddressRegionService.Region("510302","510300","\u81ea\u6d41\u4e95\u533a",3,true,null,"v1"));
+        mvc.perform(put("/api/v1/admin/address-regions").header("Authorization",bearer).contentType("application/json").content(json.writeValueAsString(rows))).andExpect(status().isOk());
+    }
+    private com.fasterxml.jackson.databind.node.ObjectNode assistedAddress() throws Exception {
+        var body=(com.fasterxml.jackson.databind.node.ObjectNode)json.readTree(addressBody("13800138000",true));
+        body.put("label","\u5bb6").put("provinceCode","510000").put("cityCode","510300").put("districtCode","510302").put("latitude",29.34).put("longitude",104.78).put("allowDuplicate",false);return body;
+    }
+    @Test void addressAssistanceReturnsDraftsWithoutPersistenceAndEnforcesRoles() throws Exception {
+        addressRegions();
+        mvc.perform(post("/api/v1/users/me/addresses/parse").header("Authorization",userBearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("text","\u5f20\u4e09 13800138000 \u56db\u5ddd\u7701\u81ea\u8d21\u5e02\u81ea\u6d41\u4e95\u533a\u6c47\u4e1c\u8def1\u53f7"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.needsConfirmation").value(true)).andExpect(jsonPath("$.data.districtCode").value("510302"));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM user_address",Integer.class));
+        mvc.perform(get("/api/v1/users/me/addresses/regions").header("Authorization",userBearer).param("parentCode","510300"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].code").value("510302"));
+        mvc.perform(put("/api/v1/admin/address-regions").header("Authorization",userBearer).contentType("application/json").content("[]")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/users/me/addresses").header("Authorization",bearer)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/users/me/addresses/reverse-geocode").header("Authorization",userBearer).contentType("application/json").content("{\"latitude\":29.34,\"longitude\":104.78,\"consent\":false}")).andExpect(status().isBadRequest());
+    }
+    @Test void addressDuplicatesRequireExplicitChoiceAndRemainUserScoped() throws Exception {
+        addressRegions();var body=assistedAddress();
+        var created=mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk()).andReturn();
+        long id=json.readTree(created.getResponse().getContentAsString()).at("/data/id").asLong();
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk());
+        body.put("detail","\u6c47\u4e1c\u8def  1  \u53f7");
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(409002));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM user_address WHERE user_id=100",Integer.class));
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",secondUserBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk());
+        body.put("allowDuplicate",true);
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk());
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM user_address WHERE user_id=100",Integer.class));
+    }
+    @Test void addressLabelsCoordinatesAndNullableUpdatesArePersistedWithValidation() throws Exception {
+        addressRegions();var body=assistedAddress();
+        var response=mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.needsRegionCompletion").value(false)).andExpect(jsonPath("$.data.coordinateSystem").value("WGS84")).andReturn();
+        long id=json.readTree(response.getResponse().getContentAsString()).at("/data/id").asLong();
+        assertEquals("\u5bb6",db.queryForObject("SELECT label FROM user_address WHERE id=?",String.class,id));
+        body.putNull("label").putNull("latitude").putNull("longitude");
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk());
+        assertNull(db.queryForObject("SELECT latitude FROM user_address WHERE id=?",java.math.BigDecimal.class,id));
+        assertNull(db.queryForObject("SELECT label FROM user_address WHERE id=?",String.class,id));
+        body.put("latitude",91).put("longitude",104);
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isBadRequest());
+        body.putNull("latitude");
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isBadRequest());
+    }
+    @Test void obsoleteAddressRemainsVisibleButCheckoutRejectsItAndOrderSnapshotNeverChanges() throws Exception {
+        addressRegions();var body=assistedAddress();
+        var response=mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk()).andReturn();
+        long address=json.readTree(response.getResponse().getContentAsString()).at("/data/id").asLong();
+        long c=category(0,"Address snapshot"),p=product(c);setProductStatus(p,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",p);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",p);
+        long order=createOrder(address,"address-snapshot");
+        String snapshot=db.queryForObject("SELECT address_snapshot FROM `order` WHERE id=?",String.class,order);
+        db.update("UPDATE `order` SET status='paid' WHERE id=?",order);
+        body.put("detail","Another building 2");
+        mvc.perform(put("/api/v1/users/me/addresses/"+address).header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk());
+        assertEquals(snapshot,db.queryForObject("SELECT address_snapshot FROM `order` WHERE id=?",String.class,order));
+        assertEquals(0,new java.math.BigDecimal("29.34").compareTo(orders.detail(100L,order).address().latitude()));
+        db.update("UPDATE address_region SET active=FALSE WHERE code='510302'");
+        mvc.perform(get("/api/v1/users/me/addresses").header("Authorization",userBearer)).andExpect(status().isOk()).andExpect(jsonPath("$.data[0].needsRegionCompletion").value(true));
+        db.update("UPDATE cart_item SET is_deleted=0,selected=1,quantity=1 WHERE user_id=100 AND product_id=?",p);
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->checkoutSettlement.settle(100L,address,null));
+        assertEquals(snapshot,db.queryForObject("SELECT address_snapshot FROM `order` WHERE id=?",String.class,order));
     }
 }
 

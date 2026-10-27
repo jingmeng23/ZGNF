@@ -1,4 +1,6 @@
 app:
+  addresses:
+    require-region-codes-at-checkout: false
   payments:
     callback-allowed-peers: 127.0.0.1,::1
     reconciliation-enabled: false

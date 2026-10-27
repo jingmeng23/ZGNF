@@ -1,6 +1,9 @@
 server:
   port: 8080
 app:
+  addresses:
+    require-region-codes-at-checkout: ${ADDRESS_REQUIRE_REGION_CODES:true}
+    geocoding-url: ${ADDRESS_GEOCODING_URL:}
   mall:
     history-capacity: ${MALL_HISTORY_CAPACITY:200}
     category-tree-cache-ttl: ${MALL_CATEGORY_CACHE_TTL:PT5M}

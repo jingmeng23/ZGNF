@@ -26,9 +26,10 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
     private final UserMapper users;
     private final OrderMapper orders;
     private final PaymentMapper payments;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
 
-    public AftersaleServiceImpl(UserMapper users, OrderMapper orders, PaymentMapper payments) {
-        this.users = users; this.orders = orders; this.payments = payments;
+    public AftersaleServiceImpl(UserMapper users, OrderMapper orders, PaymentMapper payments,org.springframework.jdbc.core.JdbcTemplate db) {
+        this.users = users; this.orders = orders; this.payments = payments; this.db=db;
     }
 
     @Override @Transactional
@@ -107,7 +108,7 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         if (payment == null || payment.getAmount().compareTo(row.getAmount()) != 0)
             throw new BusinessException("待退款支付记录不存在或金额不一致");
         payment.setStatus("refunded"); payments.updateById(payment);
-        order.setStatus("refunded"); orders.updateById(order);
+        com.gas.ecommerce.modules.order.service.OrderStateMachine.persistTransition(order, "refunded",db);
         row.setStatus("completed"); row.setRefundReference(request.refundReference().trim());
         row.setCompletionRemark(request.remark()); row.setCompletedTime(LocalDateTime.now());
         updateById(row);

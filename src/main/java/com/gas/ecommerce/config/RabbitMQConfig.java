@@ -29,7 +29,27 @@ public class RabbitMQConfig {
     /** 超时消息死信转发时会使用 order.cancel 路由键到达该队列。 */
     @Bean Binding orderCancelBinding(Queue orderCancelQueue, DirectExchange orderExchange) { return BindingBuilder.bind(orderCancelQueue).to(orderExchange).with("order.cancel"); }
     /** 短信发送任务队列；当前消费者需要对接具体短信服务商。 */
+    @Bean Queue orderCreatedQueue() { return QueueBuilder.durable("gas.order.created").build(); }
+    @Bean Queue orderCompensationQueue() { return QueueBuilder.durable("gas.order.compensate").build(); }
+    @Bean Binding orderCompensationBinding(Queue orderCompensationQueue, DirectExchange orderExchange) {
+        return BindingBuilder.bind(orderCompensationQueue).to(orderExchange).with("order.compensate");
+    }
+    @Bean Binding orderCreatedBinding(Queue orderCreatedQueue, DirectExchange orderExchange) {
+        return BindingBuilder.bind(orderCreatedQueue).to(orderExchange).with("order.created");
+    }
     @Bean Queue smsQueue() { return QueueBuilder.durable("gas.notification.sms").build(); }
     /** 通用通知队列，供后续通知消费者使用。 */
     @Bean Queue notificationQueue() { return QueueBuilder.durable("gas.notification.general").build(); }
+    @Bean Queue paymentStockQueue() { return QueueBuilder.durable("gas.payment.stock").build(); }
+    @Bean Queue paymentPointsQueue() { return QueueBuilder.durable("gas.payment.points").build(); }
+    @Bean Queue paymentNotificationQueue() { return QueueBuilder.durable("gas.payment.notification").build(); }
+    @Bean Binding paymentStockBinding(Queue paymentStockQueue, DirectExchange orderExchange) {
+        return BindingBuilder.bind(paymentStockQueue).to(orderExchange).with("payment.stock");
+    }
+    @Bean Binding paymentPointsBinding(Queue paymentPointsQueue, DirectExchange orderExchange) {
+        return BindingBuilder.bind(paymentPointsQueue).to(orderExchange).with("payment.points");
+    }
+    @Bean Binding paymentNotificationBinding(Queue paymentNotificationQueue, DirectExchange orderExchange) {
+        return BindingBuilder.bind(paymentNotificationQueue).to(orderExchange).with("payment.notification");
+    }
 }

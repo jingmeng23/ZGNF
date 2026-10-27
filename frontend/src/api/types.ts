@@ -10,6 +10,7 @@ export interface LoginResponse { accessToken: string; refreshToken: string; expi
 export interface CurrentUser { userId: string }
 // Java Long IDs remain strings to prevent precision loss.
 export interface Product {
+  brandId?: string; status?: string; statusMessage?: string; purchasable?: boolean
   categoryId?: string; description?: string | null; detailImages?: string[]
   id: string; name: string; subtitle: string; coverUrl: string | null
   price: number; originalPrice: number | null; sales: number; availableStock?: number

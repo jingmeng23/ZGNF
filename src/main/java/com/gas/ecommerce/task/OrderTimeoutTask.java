@@ -11,6 +11,11 @@ public class OrderTimeoutTask {
 
     @RabbitListener(queues = "gas.order.timeout.cancel")
     public void cancelExpiredOrder(String orderNo) {
-        orders.cancelExpired(orderNo);
+        try { orders.cancelExpired(orderNo); }
+        catch (RuntimeException ex) {
+            // Do not hot-loop poison/unknown-provider messages. DB expiry scan retries.
+            org.slf4j.LoggerFactory.getLogger(OrderTimeoutTask.class)
+                    .error("ORDER_TIMEOUT_DEFERRED orderNo={} database scan will retry",orderNo,ex);
+        }
     }
 }

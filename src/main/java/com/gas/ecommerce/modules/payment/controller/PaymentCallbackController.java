@@ -22,16 +22,20 @@ import org.springframework.web.bind.annotation.RestController;
     private final PaymentCallbackVerifier verifier;
     private final ObjectMapper json;
     private final Validator validator;
+    private final com.gas.ecommerce.modules.payment.service.PaymentCallbackSourcePolicy sources;
     public PaymentCallbackController(PaymentService payments,
             PaymentCallbackVerifier verifier,
-            ObjectMapper json,Validator validator) {
+            ObjectMapper json,Validator validator,
+            com.gas.ecommerce.modules.payment.service.PaymentCallbackSourcePolicy sources) {
         this.payments=payments;this.verifier=verifier;this.json=json;this.validator=validator;
+        this.sources=sources;
     }
     @PostMapping("/{channel}")
     public Result<?> callback(@PathVariable String channel,
             @RequestHeader(value="X-Payment-Timestamp",defaultValue="") String timestamp,
             @RequestHeader(value="X-Payment-Signature",defaultValue="") String signature,
-            @RequestBody String body) {
+            @RequestBody String body, jakarta.servlet.http.HttpServletRequest servletRequest) {
+        sources.verify(servletRequest.getRemoteAddr());
         verifier.verify(channel,timestamp,signature,body);
         PaymentCallbackRequest request;
         try {request=json.readValue(body,PaymentCallbackRequest.class);}

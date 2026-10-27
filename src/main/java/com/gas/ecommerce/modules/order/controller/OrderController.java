@@ -14,6 +14,11 @@ public class OrderController {
     private final OrderService orders;
     public OrderController(OrderService orders) { this.orders = orders; }
 
+    @PostMapping("/preview")
+    public Result<com.gas.ecommerce.modules.order.vo.OrderPreviewVO> preview(@Valid @RequestBody OrderPreviewRequest request) {
+        return Result.success(orders.preview(SecurityUtils.currentUserId(), request));
+    }
+
     @PostMapping
     public Result<OrderVO> create(@Valid @RequestBody OrderCreateRequest request) {
         return Result.success(orders.create(SecurityUtils.currentUserId(), request));
@@ -25,6 +30,10 @@ public class OrderController {
     @GetMapping("/{id}")
     public Result<OrderVO> detail(@PathVariable Long id) {
         return Result.success(orders.detail(SecurityUtils.currentUserId(), id));
+    }
+    @GetMapping("/scroll")
+    public Result<com.gas.ecommerce.modules.order.vo.OrderCursorPage> scroll(@Valid @ModelAttribute OrderCursorRequest query) {
+        return Result.success(orders.scrollMine(SecurityUtils.currentUserId(),query));
     }
     @PutMapping("/{id}/cancel")
     public Result<OrderVO> cancel(@PathVariable Long id) {

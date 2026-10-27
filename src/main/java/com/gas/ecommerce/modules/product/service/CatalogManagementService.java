@@ -24,10 +24,10 @@ public class CatalogManagementService {
     private final CategoryMapper categories;
     private final BrandMapper brands;
     private final InventoryMapper inventory;
-    private final CatalogLockMapper locks;
+    private final CatalogLockMapper locks; private final org.springframework.context.ApplicationEventPublisher events;
 
     public CatalogManagementService(ProductMapper products, CategoryMapper categories, BrandMapper brands,
-            InventoryMapper inventory, CatalogLockMapper locks) {
+            InventoryMapper inventory, CatalogLockMapper locks, org.springframework.context.ApplicationEventPublisher events) { this.events = events;
         this.products = products; this.categories = categories; this.brands = brands;
         this.inventory = inventory; this.locks = locks;
     }
@@ -59,37 +59,38 @@ public class CatalogManagementService {
         p.setDescription(r.description());
         p.setDetailImages(r.detailImages() == null ? null : String.join("\n", r.detailImages()));
         p.setPrice(r.price()); p.setOriginalPrice(r.originalPrice()); p.setStatus("draft"); p.setSales(0L); p.setIsDeleted(0);
-        products.insert(p); return product(p.getId());
+        products.insert(p); events.publishEvent(new CatalogReadService.ProductDetailChanged(p.getId())); return product(p.getId());
     }
 
     @Transactional
     public AdminProductVO update(Long id, ProductUpdateRequest r) {
         lock(); Product p = requireProduct(id);
-        validateReferences(r.categoryId(), r.brandId(), r.price(), r.originalPrice(), "on_sale".equals(p.getStatus()));
+        validateReferences(r.categoryId(), r.brandId(), r.price(), r.originalPrice(), Set.of("on_sale", "presale", "scheduled", "sold_out").contains(p.getStatus()));
         // 显式写入可空字段，允许 PUT 清除旧品牌、封面和原价。
         products.update(null, new UpdateWrapper<Product>().eq("id", id)
                 .set("category_id", r.categoryId()).set("brand_id", r.brandId()).set("name", r.name().trim())
                 .set("subtitle", r.subtitle()).set("cover_url", r.coverUrl()).set("price", r.price())
                 .set("description", r.description()).set("detail_images", r.detailImages() == null ? null : String.join("\n", r.detailImages()))
                 .set("original_price", r.originalPrice()).set("update_time", java.time.LocalDateTime.now()));
+        events.publishEvent(new CatalogReadService.ProductDetailChanged(id));
         return product(id);
     }
 
     @Transactional
     public AdminProductVO status(Long id, String status) {
         lock(); Product p = requireProduct(id);
-        if ("on_sale".equals(status)) validateReferences(p.getCategoryId(), p.getBrandId(), p.getPrice(), p.getOriginalPrice(), true);
-        p.setStatus(status); products.updateById(p); return product(id);
+        if (Set.of("on_sale", "presale", "scheduled", "sold_out").contains(status)) validateReferences(p.getCategoryId(), p.getBrandId(), p.getPrice(), p.getOriginalPrice(), true);
+        p.setStatus(status); products.updateById(p); events.publishEvent(new CatalogReadService.ProductDetailChanged(id)); return product(id);
     }
 
     @Transactional
     public void deleteProduct(Long id) {
         lock(); Product p = requireProduct(id);
-        if ("on_sale".equals(p.getStatus())) throw new BusinessException("请先下架商品再删除");
+        if (Set.of("on_sale", "presale", "scheduled", "sold_out").contains(p.getStatus())) throw new BusinessException("请先下架商品再删除");
         if (inventory.selectCount(Wrappers.<Inventory>lambdaQuery().eq(Inventory::getProductId,id)
                 .and(w->w.ne(Inventory::getQuantity,0).or().ne(Inventory::getLockedQuantity,0)))>0)
             throw new BusinessException("商品仍有库存或订单预占，请先处理库存");
-        products.deleteById(id);
+        products.deleteById(id); events.publishEvent(new CatalogReadService.ProductDetailChanged(id));
     }
 
     public List<CategoryVO> categories() {
@@ -102,7 +103,7 @@ public class CatalogManagementService {
     public CategoryVO createCategory(CategoryRequest r) {
         lock(); validateCategory(null, r);
         Category c = new Category(); c.setParentId(r.parentId()); c.setName(r.name().trim());
-        c.setSort(r.sort()); c.setStatus(r.status()); c.setIsDeleted(0); categories.insert(c);
+        c.setSort(r.sort()); c.setStatus(r.status()); c.setIsDeleted(0); categories.insert(c); events.publishEvent(new CategoryTreeService.CatalogChanged());
         return CategoryVO.from(c);
     }
 
@@ -110,7 +111,8 @@ public class CatalogManagementService {
     public CategoryVO updateCategory(Long id, CategoryRequest r) {
         lock(); Category c = requireCategory(id); validateCategory(id, r);
         c.setParentId(r.parentId()); c.setName(r.name().trim()); c.setSort(r.sort()); c.setStatus(r.status());
-        categories.updateById(c); return CategoryVO.from(c);
+        categories.updateById(c); events.publishEvent(new CategoryTreeService.CatalogChanged());
+        return CategoryVO.from(c);
     }
 
     @Transactional
@@ -120,7 +122,7 @@ public class CatalogManagementService {
             throw new BusinessException("分类下存在子分类，不能删除");
         if (products.exists(Wrappers.<Product>lambdaQuery().eq(Product::getCategoryId, id)))
             throw new BusinessException("分类下存在商品，不能删除");
-        categories.deleteById(id);
+        categories.deleteById(id); events.publishEvent(new CategoryTreeService.CatalogChanged());
     }
 
     private void validateCategory(Long id, CategoryRequest r) {
@@ -139,7 +141,7 @@ public class CatalogManagementService {
         if (id != null && "inactive".equals(r.status())) {
             if (categories.exists(Wrappers.<Category>lambdaQuery().eq(Category::getParentId, id).eq(Category::getStatus, "active")))
                 throw new BusinessException("请先停用子分类");
-            if (products.exists(Wrappers.<Product>lambdaQuery().eq(Product::getCategoryId, id).eq(Product::getStatus, "on_sale")))
+            if (products.exists(Wrappers.<Product>lambdaQuery().eq(Product::getCategoryId, id).in(Product::getStatus, Set.of("on_sale", "presale", "scheduled", "sold_out"))))
                 throw new BusinessException("请先下架该分类下的商品");
         }
     }

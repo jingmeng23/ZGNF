@@ -17,6 +17,9 @@ public class Order extends BaseEntity {
     private BigDecimal payAmount;
     private Long userCouponId;
     private BigDecimal discountAmount;
+    private BigDecimal freightAmount;
+    private BigDecimal fullReductionAmount;
+    private BigDecimal couponDiscountAmount;
     private LocalDateTime expireTime;
     private String addressSnapshot;
     private String remark;

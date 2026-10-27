@@ -9,24 +9,13 @@ import com.gas.ecommerce.common.exception.BusinessException;
 import com.gas.ecommerce.common.result.PageResult;
 import com.gas.ecommerce.common.utils.EncryptUtils;
 import com.gas.ecommerce.common.utils.OrderNoGenerator;
-import com.gas.ecommerce.modules.cart.entity.CartItem;
-import com.gas.ecommerce.modules.cart.mapper.CartItemMapper;
 import com.gas.ecommerce.modules.order.dto.*;
 import com.gas.ecommerce.modules.order.entity.Order;
 import com.gas.ecommerce.modules.order.entity.OrderItem;
 import com.gas.ecommerce.modules.order.mapper.*;
 import com.gas.ecommerce.modules.order.service.*;
-import com.gas.ecommerce.modules.inventory.entity.Inventory;
-import com.gas.ecommerce.modules.inventory.mapper.InventoryMapper;
 import com.gas.ecommerce.modules.order.vo.*;
-import com.gas.ecommerce.modules.product.entity.Product;
-import com.gas.ecommerce.modules.product.mapper.CatalogLockMapper;
-import com.gas.ecommerce.modules.product.mapper.ProductMapper;
-import com.gas.ecommerce.modules.product.service.ProductBrowseService;
-import com.gas.ecommerce.modules.user.entity.UserAddress;
-import com.gas.ecommerce.modules.user.mapper.UserAddressMapper;
 import com.gas.ecommerce.modules.user.mapper.UserMapper;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,92 +26,100 @@ import io.micrometer.core.instrument.MeterRegistry;
 
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
-    private static final BigDecimal MAX_AMOUNT = new BigDecimal("99999999.99");
+
     private final com.gas.ecommerce.modules.coupon.service.CouponService coupons;
+    private final com.gas.ecommerce.modules.marketing.service.CheckoutMarketingService marketing;
     private final UserMapper users;
-    private final UserAddressMapper addresses;
-    private final CartItemMapper cart;
-    private final ProductMapper products;
-    private final InventoryMapper inventory;
-    private final CatalogLockMapper catalogLock;
-    private final ProductBrowseService browse;
     private final OrderItemMapper items;
     private final OrderInventoryService stock;
     private final OrderNoGenerator numbers;
     private final ObjectMapper json;
     private final String encryptionKey;
     private final MeterRegistry metrics;
+    private final CheckoutTicketService tickets;
+    private final CheckoutSettlementService settlement;
+    private final OrderSubmissionStore submissions;
+    private final CheckoutOrderWriter writer;
+    private final CheckoutCompensationService compensation;
+    private final CheckoutPointsGateway points;
+    private final OrderCloseReleaseService closeReleases;
+    private final OrderDetailAssembler details;
+    private final com.gas.ecommerce.modules.payment.service.PaymentCloseGuard paymentClose;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
 
-    public OrderServiceImpl(com.gas.ecommerce.modules.coupon.service.CouponService coupons, UserMapper users, UserAddressMapper addresses, CartItemMapper cart,
-            ProductMapper products, InventoryMapper inventory, CatalogLockMapper catalogLock, ProductBrowseService browse,
-            OrderItemMapper items, OrderInventoryService stock, OrderNoGenerator numbers, ObjectMapper json,
-            @Value("${app.encryption-key}") String encryptionKey, MeterRegistry metrics) {
-        this.coupons = coupons; this.users = users; this.addresses = addresses; this.cart = cart;
-        this.products = products; this.inventory = inventory; this.catalogLock = catalogLock; this.browse = browse;
-        this.items = items; this.stock = stock; this.numbers = numbers;
-        this.json = json; this.encryptionKey = encryptionKey;
-        this.metrics = metrics;
+    public OrderServiceImpl(com.gas.ecommerce.modules.coupon.service.CouponService coupons,
+            com.gas.ecommerce.modules.marketing.service.CheckoutMarketingService marketing,
+            UserMapper users, OrderItemMapper items, OrderInventoryService stock,
+            OrderNoGenerator numbers, ObjectMapper json, @Value("${app.encryption-key}") String encryptionKey,
+            MeterRegistry metrics, CheckoutTicketService tickets, CheckoutSettlementService settlement,
+            OrderSubmissionStore submissions, CheckoutOrderWriter writer, CheckoutCompensationService compensation,
+            CheckoutPointsGateway points, com.gas.ecommerce.modules.payment.service.PaymentCloseGuard paymentClose,
+            org.springframework.jdbc.core.JdbcTemplate db, OrderCloseReleaseService closeReleases,OrderDetailAssembler details) {
+        this.coupons=coupons; this.marketing=marketing; this.users=users; this.items=items; this.stock=stock;
+        this.numbers=numbers; this.json=json; this.encryptionKey=encryptionKey; this.metrics=metrics;
+        this.tickets=tickets; this.settlement=settlement; this.submissions=submissions;
+        this.writer=writer; this.compensation=compensation; this.points=points; this.paymentClose=paymentClose; this.db=db; this.closeReleases=closeReleases; this.details=details;
     }
 
     @Override @Transactional
-    public OrderVO create(Long userId, OrderCreateRequest request) {
-        var user = users.lockActiveUser(userId);
-        if (user == null || !"active".equals(user.getStatus())) throw new BusinessException("用户不存在或已停用");
-        Order existing = getOne(Wrappers.<Order>lambdaQuery().eq(Order::getUserId, userId)
-                .eq(Order::getRequestId, request.requestId()));
-        if (existing != null) return view(existing);
+    public OrderPreviewVO preview(Long userId, OrderPreviewRequest request) {
+        ensureActive(userId);
+        var quote=settlement.settle(userId,request.addressId(),request.userCouponId());
+        String number=numbers.next();
+        LocalDateTime expires=LocalDateTime.now().plusMinutes(15);
+        String token=tickets.issue(number,userId,quote.fingerprint(),expires);
+        var address=quote.address().address();
+        return new OrderPreviewVO(number,token,expires,new OrderAddressVO(address.getReceiver(),
+                EncryptUtils.decryptAes(address.getPhone(),encryptionKey),address.getProvince(),address.getCity(),address.getDistrict(),address.getDetail()),
+                quote.items().stream().map(i->new OrderItemVO(i.getProductId(),i.getProductName(),i.getProductImage(),i.getQuantity(),i.getUnitPrice(),i.getAmount(),i.getDiscountAmount(),i.getPayAmount())).toList(),
+                quote.total(),quote.marketing().discountAmount(),quote.payAmount(),quote.address().freightAmount(),quote.marketing().fullReductionAmount(),quote.marketing().couponAmount());
+    }
 
-        UserAddress address = addresses.selectOne(Wrappers.<UserAddress>lambdaQuery()
-                .eq(UserAddress::getId, request.addressId()).eq(UserAddress::getUserId, userId));
-        if (address == null) throw new BusinessException("收货地址不存在");
-        if (catalogLock.lock() == null) throw new IllegalStateException("缺少商品分类事务锁");
-        List<CartItem> selected = cart.selectList(Wrappers.<CartItem>lambdaQuery()
-                .eq(CartItem::getUserId, userId).eq(CartItem::getSelected, true).orderByAsc(CartItem::getProductId));
-        if (selected.isEmpty()) throw new BusinessException("请先选择购物车商品");
-        Set<Long> visibleCategories = browse.categories().stream().map(c -> c.id()).collect(Collectors.toSet());
-        List<OrderItem> snapshots = new ArrayList<>();
-        BigDecimal total = BigDecimal.ZERO;
-        for (CartItem cartItem : selected) {
-            Product product = products.selectById(cartItem.getProductId());
-            if (product == null || !"on_sale".equals(product.getStatus())
-                    || !visibleCategories.contains(product.getCategoryId()))
-                throw new BusinessException("购物车中存在已下架或不可售商品");
-            if (cartItem.getQuantity() == null || cartItem.getQuantity() < 1 || cartItem.getQuantity() > 999)
-                throw new BusinessException("商品数量须为 1 至 999");
-            if (product.getPrice() == null || product.getPrice().signum() < 0)
-                throw new BusinessException("商品价格异常");
-            long available = inventory.selectList(Wrappers.<Inventory>lambdaQuery()
-                            .eq(Inventory::getProductId, product.getId()))
-                    .stream().mapToLong(row -> Math.max(0L, (long) row.getQuantity() - row.getLockedQuantity())).sum();
-            if (available < cartItem.getQuantity())
-                throw new BusinessException("商品库存不足，请调整购物车数量：" + product.getName());
-            OrderItem item = new OrderItem();
-            item.setProductId(product.getId()); item.setProductName(product.getName());
-            item.setProductImage(product.getCoverUrl()); item.setQuantity(cartItem.getQuantity());
-            item.setUnitPrice(product.getPrice());
-            item.setAmount(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
-            total = total.add(item.getAmount()); snapshots.add(item);
+    @Override
+    @com.gas.ecommerce.modules.order.annotation.CheckoutIdempotent
+    public OrderVO create(Long userId, OrderCreateRequest request) {
+        OrderSubmissionStore.Claim claim=submissions.claim(userId,request);
+        if (claim.replay()) return view(findByNumber(userId,claim.orderNo()));
+        if (claim.busy()) return awaitOriginal(userId,claim.orderNo());
+        try {
+            var quote=settlement.settle(userId,request.addressId(),request.userCouponId());
+            submissions.validateQuote(userId,request,quote.fingerprint());
+            submissions.heartbeat(claim);
+            stock.lockCheckout(claim.orderNo(),quote.items());
+            submissions.heartbeat(claim);
+            marketing.reserve(claim.orderNo(),userId,request.userCouponId(),quote.total(),quote.marketing());
+            submissions.heartbeat(claim);
+            points.reserve(claim.orderNo(),userId);
+            submissions.heartbeat(claim);
+            Order order=writer.save(userId,request,claim,quote);
+            metrics.counter("shopping.cart.checkout","result","success").increment();
+            return view(order);
+        } catch (RuntimeException failure) {
+            try {
+                // Persist compensation intent before releasing anything. An uncertain commit is never blindly rolled back.
+                if (submissions.fail(claim,failure)) compensation.compensate(claim.orderNo());
+                else {
+                    Order committed=getOne(Wrappers.<Order>lambdaQuery().eq(Order::getUserId,userId).eq(Order::getOrderNo,claim.orderNo()));
+                    if (committed!=null) return view(committed);
+                }
+            } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+            throw failure;
         }
-        if (total.compareTo(MAX_AMOUNT) > 0) throw new BusinessException("订单金额超过上限");
-        Order order = new Order();
-        order.setUserId(userId); order.setOrderNo(numbers.next()); order.setRequestId(request.requestId());
-        order.setStatus("pending_payment"); order.setTotalAmount(total); order.setPayAmount(total);
-        order.setExpireTime(LocalDateTime.now().plusMinutes(30));
-        order.setRemark(request.remark());
-        // Keep the address phone encrypted in the immutable database snapshot.
-        order.setAddressSnapshot(serialize(new OrderAddressVO(address.getReceiver(), address.getPhone(),
-                address.getProvince(), address.getCity(), address.getDistrict(), address.getDetail())));
-        order.setDiscountAmount(BigDecimal.ZERO);
-        save(order);
-        BigDecimal discount = coupons.reserve(userId, request.userCouponId(), order.getId(), total);
-        order.setUserCouponId(request.userCouponId()); order.setDiscountAmount(discount); order.setPayAmount(total.subtract(discount));
-        updateById(order);
-        for (OrderItem item : snapshots) { item.setOrderId(order.getId()); items.insert(item); }
-        stock.reserve(order, snapshots);
-        cart.delete(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getUserId, userId)
-                .in(CartItem::getId, selected.stream().map(CartItem::getId).toList()));
-        metrics.counter("shopping.cart.checkout", "result", "success").increment();
-        return view(order);
+    }
+    private Order findByNumber(Long userId, String number) {
+        Order order=getOne(Wrappers.<Order>lambdaQuery().eq(Order::getUserId,userId).eq(Order::getOrderNo,number));
+        if (order==null) throw new CheckoutConflictException("原订单暂不可读取，请使用同一Token重试");
+        return order;
+    }
+    private OrderVO awaitOriginal(Long userId, String number) {
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(2);
+        do {
+            Order order=getOne(Wrappers.<Order>lambdaQuery().eq(Order::getUserId,userId).eq(Order::getOrderNo,number));
+            if (order!=null) return view(order);
+            try { Thread.sleep(25); }
+            catch (InterruptedException ex) { Thread.currentThread().interrupt(); break; }
+        } while (System.nanoTime()<deadline);
+        throw new CheckoutConflictException("订单提交或资源释放处理中，请稍后使用同一Token查询或重试");
     }
 
     @Override public PageResult<OrderVO> listMine(Long userId, OrderQueryRequest query) {
@@ -131,11 +128,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
     @Override public PageResult<OrderVO> listAdmin(OrderQueryRequest query) { return pageOrders(null, query); }
 
-    @Override public OrderVO detail(Long userId, Long id) {
+    @Override @Transactional(readOnly=true,isolation=org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public OrderVO detail(Long userId, Long id) {
         ensureActive(userId);
-        return view(requireOwned(userId, id, false));
+        return details.enrich(view(requireOwned(userId, id, false)));
     }
-    @Override public OrderVO detailAdmin(Long id) { return view(requireOrder(id, false)); }
+    @Override public OrderVO detailAdmin(Long id) { return details.enrich(view(requireOrder(id, false))); }
 
     @Override @Transactional
     public OrderVO cancel(Long userId, Long id) {
@@ -153,7 +151,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         Order order = requireOwned(userId, id, true);
         if ("completed".equals(order.getStatus())) return view(order);
         if (!"processing".equals(order.getStatus())) throw new BusinessException("订单尚未进入配送或处理阶段");
-        order.setStatus("completed"); updateById(order);
+        com.gas.ecommerce.modules.order.service.OrderStateMachine.persistTransition(order, "completed",db);
         return view(order);
     }
 
@@ -163,7 +161,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if ("processing".equals(order.getStatus())) return view(order);
         if (!"paid".equals(order.getStatus())) throw new BusinessException("仅已支付订单可开始处理");
         stock.consume(order);
-        order.setStatus("processing"); updateById(order);
+        com.gas.ecommerce.modules.order.service.OrderStateMachine.persistTransition(order, "processing",db);
         return view(order);
     }
 
@@ -177,12 +175,17 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     private void cancelOrder(Order order) {
-        stock.release(order);
-        coupons.release(order);
-        order.setStatus("cancelled"); updateById(order);
+        if (!paymentClose.mayClose(order)) {
+            // Close may have persisted a provider success; refresh the returned view.
+            com.gas.ecommerce.modules.order.service.OrderStateMachine.transition(order,baseMapper.lockById(order.getId()).getStatus());
+            return;
+        }
+        com.gas.ecommerce.modules.order.service.OrderStateMachine.persistTransition(order,"cancelled",db);
+        closeReleases.enqueue(order.getId());
     }
 
     private PageResult<OrderVO> pageOrders(Long userId, OrderQueryRequest query) {
+        if(userId!=null && (long)(query.getPage()-1)*query.getSize()>10000) throw new BusinessException("Deep pagination requires /orders/scroll");
         var wrapper = Wrappers.<Order>lambdaQuery().eq(userId != null, Order::getUserId, userId)
                 .eq(query.getStatus() != null, Order::getStatus, query.getStatus())
                 .eq(query.getOrderNo() != null && !query.getOrderNo().isBlank(), Order::getOrderNo, query.getOrderNo())
@@ -197,14 +200,33 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 page.getTotal(), page.getCurrent(), page.getSize(), page.getPages());
     }
 
+    @Override public OrderCursorPage scrollMine(Long userId,OrderCursorRequest query) {
+        ensureActive(userId);
+        if(query.getSize()<1 || query.getSize()>100) throw new BusinessException("Invalid page size");
+        var wrapper=Wrappers.<Order>lambdaQuery().eq(Order::getUserId,userId)
+                .eq(query.getStatus()!=null,Order::getStatus,query.getStatus());
+        if(query.getAfterId()!=null) {
+            Order anchor=requireOwned(userId,query.getAfterId(),false);
+            if(query.getStatus()!=null && !query.getStatus().equals(anchor.getStatus())) throw new BusinessException("Cursor tab changed; restart pagination");
+            wrapper.and(w->w.lt(Order::getCreateTime,anchor.getCreateTime()).or(v->v.eq(Order::getCreateTime,anchor.getCreateTime()).lt(Order::getId,anchor.getId())));
+        }
+        var found=list(wrapper.orderByDesc(Order::getCreateTime).orderByDesc(Order::getId).last("LIMIT "+(query.getSize()+1)));
+        boolean more=found.size()>query.getSize();
+        var page=found.subList(0,Math.min(found.size(),query.getSize()));
+        if(page.isEmpty()) return new OrderCursorPage(List.of(),false,null);
+        var grouped=items.selectList(Wrappers.<OrderItem>lambdaQuery().in(OrderItem::getOrderId,page.stream().map(Order::getId).toList()).orderByAsc(OrderItem::getId))
+                .stream().collect(Collectors.groupingBy(OrderItem::getOrderId));
+        return new OrderCursorPage(page.stream().map(o->view(o,grouped.getOrDefault(o.getId(),List.of()))).toList(),more,more?page.getLast().getId():null);
+    }
+
     private Order requireOrder(Long id, boolean lock) {
         Order order = lock ? baseMapper.lockById(id) : getById(id);
         if (order == null) throw new BusinessException("订单不存在");
         return order;
     }
     private Order requireOwned(Long userId, Long id, boolean lock) {
-        Order order = requireOrder(id, lock);
-        if (!userId.equals(order.getUserId())) throw new BusinessException("订单不存在");
+        Order order = lock ? baseMapper.lockOwned(id,userId) : getOne(Wrappers.<Order>lambdaQuery().eq(Order::getId,id).eq(Order::getUserId,userId));
+        if(order==null) throw new BusinessException("Order does not exist");
         return order;
     }
     private void ensureActive(Long userId) {
@@ -223,11 +245,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         return new OrderVO(order.getId(), order.getUserId(), order.getOrderNo(), order.getStatus(),
                 order.getTotalAmount(), order.getPayAmount(), order.getUserCouponId(), order.getDiscountAmount(), order.getRemark(), order.getCreateTime(),
                 order.getExpireTime(), address, orderItems.stream().map(i -> new OrderItemVO(i.getProductId(),
-                        i.getProductName(), i.getProductImage(), i.getQuantity(), i.getUnitPrice(), i.getAmount())).toList());
-    }
-    private String serialize(OrderAddressVO address) {
-        try { return json.writeValueAsString(address); }
-        catch (JsonProcessingException ex) { throw new IllegalStateException("订单地址序列化失败", ex); }
+                        i.getProductName(), i.getProductImage(), i.getQuantity(), i.getUnitPrice(), i.getAmount(), i.getDiscountAmount(), i.getPayAmount())).toList(), order.getFreightAmount(), order.getFullReductionAmount(), order.getCouponDiscountAmount());
     }
     private OrderAddressVO readAddress(String snapshot) {
         if (snapshot == null) return null;

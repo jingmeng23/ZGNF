@@ -21,7 +21,7 @@ export const catalogApi = {
     }
     const params = new URLSearchParams({ page: String(page), size: String(size) })
     for (const key of ['keyword', 'categoryId', 'sort', 'order'] as const) if (query[key]) params.set(key, query[key]!)
-    return request<PageResult<Product>>(`/products?${params}`)
+    return request<PageResult<Product>>(`/mall/products?${params}`)
   },
   async categories(): Promise<Category[]> {
     if (demoMode) return [{ id: 'demo-1', parentId: '0', name: '燃气灶', sort: 0, status: 'active' }, { id: 'demo-2', parentId: '0', name: '热水器', sort: 1, status: 'active' }, { id: 'accessories', parentId: '0', name: '安全配件', sort: 2, status: 'active' }]

@@ -8,6 +8,8 @@ export const router = createRouter({
   history: createWebHashHistory(),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
+    { path: '/favorites', component: () => import('../views/MallPersonalView.vue'), meta: { title: '我的收藏', requiresAuth: true } },
+    { path: '/history', component: () => import('../views/MallPersonalView.vue'), meta: { title: '浏览足迹', requiresAuth: true } },
     {
       path: '/admin/login',
       component: () => import('../admin/AdminLogin.vue'),

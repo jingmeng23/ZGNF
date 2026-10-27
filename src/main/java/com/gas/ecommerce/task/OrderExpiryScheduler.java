@@ -19,11 +19,22 @@ public class OrderExpiryScheduler {
     @Scheduled(initialDelayString = "${app.orders.expiry-scan-ms:60000}",
             fixedDelayString = "${app.orders.expiry-scan-ms:60000}")
     public void cancelExpiredOrders() {
-        var orderNos = jdbc.queryForList("SELECT order_no FROM `order` WHERE status='pending_payment' " +
-                "AND expire_time<=CURRENT_TIMESTAMP AND is_deleted=0 ORDER BY id LIMIT 100", String.class);
-        for (String orderNo : orderNos) {
-            try { orders.cancelExpired(orderNo); }
-            catch (RuntimeException ex) { log.error("Failed to cancel expired order {}", orderNo, ex); }
+        // A finite scan window prevents continuous inserts from extending this run.
+        var cutoff=jdbc.queryForObject("SELECT CURRENT_TIMESTAMP",java.sql.Timestamp.class);
+        Long upperId=jdbc.queryForObject("SELECT COALESCE(MAX(id),0) FROM `order`",Long.class);
+        long cursor=0;
+        while (cursor<upperId) {
+            var batch=jdbc.query("SELECT id,order_no FROM `order` WHERE status='pending_payment' " +
+                    "AND expire_time<=? AND is_deleted=0 AND id>? AND id<=? ORDER BY id LIMIT 100",
+                    (rs,n)->new ExpiredOrder(rs.getLong("id"),rs.getString("order_no")),cutoff,cursor,upperId);
+            if(batch.isEmpty()) break;
+            for (var order:batch) {
+                // Advance even when closure fails: poison/UNKNOWN attempts must not starve later IDs.
+                cursor=order.id();
+                try { orders.cancelExpired(order.orderNo()); }
+                catch (RuntimeException ex) { log.error("Failed to cancel expired order {}", order.orderNo(), ex); }
+            }
         }
     }
+    private record ExpiredOrder(long id,String orderNo) { }
 }

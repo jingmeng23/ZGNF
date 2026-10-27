@@ -1,9 +1,32 @@
 server:
   port: 8080
 app:
+  mall:
+    history-capacity: ${MALL_HISTORY_CAPACITY:200}
+    category-tree-cache-ttl: ${MALL_CATEGORY_CACHE_TTL:PT5M}
+    detail-cache:
+      enabled: ${MALL_DETAIL_CACHE_ENABLED:true}
+      l1-max-size: ${MALL_DETAIL_L1_MAX_SIZE:5000}
+      l1-ttl: ${MALL_DETAIL_L1_TTL:PT20S}
+      redis-ttl: ${MALL_DETAIL_REDIS_TTL:PT10M}
+      jitter: ${MALL_DETAIL_CACHE_JITTER:PT2M}
+      negative-ttl: ${MALL_DETAIL_NEGATIVE_TTL:PT20S}
+      lock-lease: ${MALL_DETAIL_LOCK_LEASE:PT10S}
+      wait-timeout: ${MALL_DETAIL_WAIT_TIMEOUT:PT2S}
+      stale-grace: ${MALL_DETAIL_STALE_GRACE:PT30S}
+      max-detail-bytes: ${MALL_DETAIL_MAX_BYTES:524288}
+    elasticsearch:
+      url: ${MALL_ES_URL:}
+      index: ${MALL_ES_INDEX:mall-products}
+      api-key: ${MALL_ES_API_KEY:}
+      sync-enabled: ${MALL_ES_SYNC_ENABLED:false}
+      sync-ms: ${MALL_ES_SYNC_MS:300000}
   payments:
     allowed-channels: ${PAYMENT_ALLOWED_CHANNELS:}
     callback-secret: ${PAYMENT_CALLBACK_SECRET:}
+    callback-allowed-peers: ${PAYMENT_CALLBACK_ALLOWED_PEERS:}
+    reconciliation-enabled: ${PAYMENT_RECONCILIATION_ENABLED:true}
+    reconciliation-ms: ${PAYMENT_RECONCILIATION_MS:30000}
   admin-bootstrap:
     enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
     username: ${ADMIN_BOOTSTRAP_USERNAME:}

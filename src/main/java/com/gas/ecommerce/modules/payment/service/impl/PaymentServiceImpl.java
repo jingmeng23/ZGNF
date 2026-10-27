@@ -29,10 +29,14 @@ import com.gas.ecommerce.modules.payment.service.PaymentService;
     private final UserMapper users;
     private final PaymentNoGenerator numbers;
     private final Set<String> channels;
+    private final com.gas.ecommerce.modules.payment.service.PaymentOutcomeHandler outcomes;
+    private final com.gas.ecommerce.modules.payment.service.PaymentRecoveryStore recovery;
     public PaymentServiceImpl(com.gas.ecommerce.modules.coupon.service.CouponService coupons, OrderMapper orders,
             UserMapper users, PaymentNoGenerator numbers,
-            @Value("${app.payments.allowed-channels:}") String channels) {
-        this.coupons=coupons; this.orders=orders; this.users=users; this.numbers=numbers;
+            @Value("${app.payments.allowed-channels:}") String channels,
+            com.gas.ecommerce.modules.payment.service.PaymentOutcomeHandler outcomes,
+            com.gas.ecommerce.modules.payment.service.PaymentRecoveryStore recovery) {
+        this.outcomes=outcomes; this.recovery=recovery; this.coupons=coupons; this.orders=orders; this.users=users; this.numbers=numbers;
         this.channels=Arrays.stream(channels.split(",")).map(String::trim).filter(s->!s.isEmpty()).collect(Collectors.toSet());
     }
     @Override @Transactional
@@ -49,7 +53,7 @@ import com.gas.ecommerce.modules.payment.service.PaymentService;
             return view(existing);
         }
         Payment p=new Payment(); p.setPaymentNo(numbers.next()); p.setOrderId(order.getId()); p.setUserId(userId);
-        p.setAmount(order.getPayAmount()); p.setChannel(request.channel()); p.setStatus("pending"); p.setIsDeleted(0); save(p);
+        p.setAmount(order.getPayAmount()); p.setChannel(request.channel()); p.setStatus("pending"); p.setIsDeleted(0); save(p); recovery.created(p.getId());
         return view(p);
     }
     @Override public PaymentVO detail(Long userId,Long id) {
@@ -71,29 +75,7 @@ import com.gas.ecommerce.modules.payment.service.PaymentService;
     @Override @Transactional
     public PaymentVO callback(String channel,PaymentCallbackRequest r) {
         if(!channels.contains(channel)) throw error("支付渠道未启用");
-        Payment found=getOne(Wrappers.<Payment>lambdaQuery().eq(Payment::getPaymentNo,r.paymentNo()));
-        if(found==null || !channel.equals(found.getChannel())) throw error("支付记录不存在");
-        // Serialize callbacks, cancellation and refund completion on the order before locking payment.
-        var order=orders.lockById(found.getOrderId());
-        Payment p=baseMapper.lockById(found.getId());
-        if(order==null || p==null || !p.getUserId().equals(order.getUserId()) || !channel.equals(p.getChannel())
-                || p.getAmount().compareTo(r.amount())!=0 || p.getAmount().compareTo(order.getPayAmount())!=0) throw error("支付订单或金额不一致");
-        if(!"pending".equals(p.getStatus())) {
-            if((p.getStatus().equals(r.status()) || ("refunded".equals(p.getStatus()) && "success".equals(r.status())))
-                    && r.transactionNo().equals(p.getProviderTransactionNo())) return view(p);
-            throw error("支付记录状态与回调不一致");
-        }
-        requirePayable(order);
-        if(r.eventTime().isBefore(p.getCreateTime().minusSeconds(1)) || r.eventTime().isAfter(LocalDateTime.now().plusMinutes(5)))
-            throw error("支付事件时间不合法");
-        if(count(Wrappers.<Payment>lambdaQuery()
-                .eq(Payment::getChannel,channel).eq(Payment::getProviderTransactionNo,r.transactionNo()).ne(Payment::getId,p.getId()))>0)
-            throw error("渠道交易流水号已被使用");
-        p.setProviderTransactionNo(r.transactionNo()); p.setStatus(r.status());
-        if("success".equals(r.status())) { p.setPaidTime(r.eventTime()); coupons.markUsed(order); order.setStatus("paid"); orders.updateById(order); }
-        try { updateById(p); }
-        catch(DuplicateKeyException ex) {throw error("渠道交易流水号已被使用");}
-        return view(p);
+        return view(outcomes.accept(channel,r));
     }
     private void requirePayable(Order order) {
         if(!"pending_payment".equals(order.getStatus()) || order.getExpireTime()==null || !order.getExpireTime().isAfter(LocalDateTime.now()))

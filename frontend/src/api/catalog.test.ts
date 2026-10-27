@@ -12,7 +12,7 @@ describe('catalog API', () => {
     vi.stubGlobal('fetch', fetchMock)
     await catalogApi.list({ page: 2, size: 12, keyword: '燃气灶', categoryId: '42', sort: 'price', order: 'asc' })
     const url = new URL(fetchMock.mock.calls[0][0] as string, 'http://localhost')
-    expect(url.pathname).toBe('/api/v1/products')
+    expect(url.pathname).toBe('/api/v1/mall/products')
     expect(Object.fromEntries(url.searchParams)).toEqual({ page: '2', size: '12', keyword: '燃气灶', categoryId: '42', sort: 'price', order: 'asc' })
   })
 

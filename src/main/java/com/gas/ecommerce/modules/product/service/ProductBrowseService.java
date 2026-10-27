@@ -3,8 +3,7 @@ package com.gas.ecommerce.modules.product.service;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gas.ecommerce.common.result.PageResult;
-import com.gas.ecommerce.modules.inventory.entity.Inventory;
-import com.gas.ecommerce.modules.inventory.mapper.InventoryMapper;
+import com.gas.ecommerce.modules.inventory.service.StockReadService;
 import com.gas.ecommerce.modules.product.dto.ProductQueryRequest;
 import com.gas.ecommerce.modules.product.entity.Category;
 import com.gas.ecommerce.modules.product.entity.Product;
@@ -20,9 +19,9 @@ import org.springframework.stereotype.Service;
 public class ProductBrowseService {
     private final ProductMapper products;
     private final CategoryMapper categories;
-    private final InventoryMapper inventory;
+    private final StockReadService inventory;
 
-    public ProductBrowseService(ProductMapper products, CategoryMapper categories, InventoryMapper inventory) {
+    public ProductBrowseService(ProductMapper products, CategoryMapper categories, StockReadService inventory) {
         this.products = products; this.categories = categories; this.inventory = inventory;
     }
 
@@ -97,11 +96,7 @@ public class ProductBrowseService {
     private List<ProductVO> views(List<Product> list, boolean includeDetails) {
         if (list.isEmpty()) return List.of();
         List<Long> ids = list.stream().map(Product::getId).toList();
-        Map<Long, Long> stocks = new HashMap<>();
-        for (Inventory item : inventory.selectList(Wrappers.<Inventory>lambdaQuery().in(Inventory::getProductId, ids))) {
-            long available = Math.max(0L, (long) item.getQuantity() - item.getLockedQuantity());
-            stocks.merge(item.getProductId(), available, Long::sum);
-        }
+        Map<Long, Long> stocks = inventory.products(ids);
         return list.stream().map(p -> new ProductVO(p.getId(), p.getCategoryId(), p.getName(), p.getSubtitle(),
                 p.getCoverUrl(), p.getPrice(), p.getOriginalPrice(), p.getSales(),
                 stocks.getOrDefault(p.getId(), 0L), includeDetails ? p.getDescription() : null,

@@ -34,8 +34,10 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
+                        .requestMatchers("/api/v1/mall/me/**").hasRole("USER")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/mall/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/api/v1/products", "/api/v1/products/*", "/api/v1/categories").permitAll()
+                                "/api/v1/products", "/api/v1/products/*", "/api/v1/categories", "/api/v1/categories/tree").permitAll()
                         // 登录、支付平台回调、API 文档和健康检查无需先登录。
                         .requestMatchers("/api/v1/auth/**", "/api/v1/payment/callback/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/actuator/health").permitAll()
                         // hasRole("ADMIN") 实际检查的权限名是 ROLE_ADMIN。

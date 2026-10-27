@@ -9,4 +9,6 @@ import org.apache.ibatis.annotations.Mapper;
     java.util.List<Long> selectExpiredOrderIds();
     @org.apache.ibatis.annotations.Select("SELECT * FROM `order` WHERE id=#{id} AND is_deleted=0 FOR UPDATE")
     Order lockById(@org.apache.ibatis.annotations.Param("id") Long id);
+    @org.apache.ibatis.annotations.Select("SELECT * FROM `order` WHERE id=#{id} AND user_id=#{userId} AND is_deleted=0 FOR UPDATE")
+    Order lockOwned(@org.apache.ibatis.annotations.Param("id") Long id,@org.apache.ibatis.annotations.Param("userId") Long userId);
 }

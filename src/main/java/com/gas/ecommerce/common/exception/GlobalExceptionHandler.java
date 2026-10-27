@@ -18,6 +18,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 异常或错误码类型，用于统一表达程序处理失败的原因。
  */
 public class GlobalExceptionHandler {
+    @ExceptionHandler(com.gas.ecommerce.modules.order.service.CheckoutUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public Result<Void> checkoutUnavailable(com.gas.ecommerce.modules.order.service.CheckoutUnavailableException ex) {
+        return Result.of(503001,ex.getMessage(),null);
+    }
+    @ExceptionHandler(com.gas.ecommerce.modules.order.service.CheckoutConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Result<Void> checkoutConflict(com.gas.ecommerce.modules.order.service.CheckoutConflictException ex) {
+        return Result.of(ex.getCode(),ex.getMessage(),null);
+    }
     @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public Result<Void> credentials(Exception ex) { return Result.of(ErrorCode.UNAUTHENTICATED, "账号、密码或管理员授权无效", null); }

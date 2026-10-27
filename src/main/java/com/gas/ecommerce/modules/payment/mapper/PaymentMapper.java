@@ -10,4 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
     Payment lockSuccessfulForOrder(@org.apache.ibatis.annotations.Param("orderId") Long orderId);
     @org.apache.ibatis.annotations.Select("SELECT * FROM payment WHERE id=#{id} AND is_deleted=0 FOR UPDATE")
     Payment lockById(@org.apache.ibatis.annotations.Param("id") Long id);
+    /** Current read after acquiring the order lock: never enumerate attempts from an RR snapshot. */
+    @org.apache.ibatis.annotations.Select("SELECT * FROM payment WHERE order_id=#{orderId} AND is_deleted=0 ORDER BY id FOR UPDATE")
+    java.util.List<Payment> lockAttemptsForOrder(@org.apache.ibatis.annotations.Param("orderId") Long orderId);
 }

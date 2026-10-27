@@ -1,0 +1,23 @@
+# Optional local Elasticsearch: docker compose -f docker-compose.yml -f docker-compose.search.yml up -d
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: ["elasticsearch_data:/usr/share/elasticsearch/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  gas-server:
+    environment:
+      MALL_ES_URL: http://elasticsearch:9200
+      MALL_ES_SYNC_ENABLED: "true"
+    depends_on:
+      elasticsearch: {condition: service_healthy}
+volumes:
+  elasticsearch_data:

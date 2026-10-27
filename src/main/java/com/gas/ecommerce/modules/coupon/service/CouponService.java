@@ -92,16 +92,36 @@ public class CouponService {
         var p=owned.selectPage(new Page<UserCoupon>(q.getPage(),q.getSize()),w.orderByDesc(UserCoupon::getCreateTime).orderByDesc(UserCoupon::getId));
         return new PageResult<>(p.getRecords().stream().map(this::view).toList(),p.getTotal(),p.getCurrent(),p.getSize(),p.getPages());
     }
-    /** Caller holds the order transaction; row lock prevents spending the same coupon twice. */
-    @Transactional public BigDecimal reserve(Long userId,Long id,Long orderId,BigDecimal total) {
+    /** Eligibility check without reserving the coupon. */
+    public BigDecimal preview(Long userId, Long id, BigDecimal total) {
         if(id==null) return BigDecimal.ZERO;
-        UserCoupon u=owned.lockById(id); var now=LocalDateTime.now();
+        UserCoupon u=owned.selectById(id);
+        return discount(userId, u, total);
+    }
+    private BigDecimal discount(Long userId, UserCoupon u, BigDecimal total) {
+        var now=LocalDateTime.now();
         if(u==null || !userId.equals(u.getUserId()) || !"unused".equals(u.getStatus()) || u.getAmount()==null
                 || u.getMinimumAmount()==null || u.getStartTime()==null || u.getExpireTime()==null
                 || u.getStartTime().isAfter(now) || !u.getExpireTime().isAfter(now)) throw error("优惠券不存在、已占用或已过期");
         if(total.compareTo(u.getMinimumAmount())<0) throw error("订单未达到优惠券使用门槛");
         if(total.compareTo(u.getAmount())<=0) throw error("订单金额必须大于优惠券面额");
+        return u.getAmount();
+    }
+    /** Caller holds the order transaction; row lock prevents spending the same coupon twice. */
+    @Transactional public BigDecimal reserve(Long userId,Long id,Long orderId,BigDecimal total) {
+        if(id==null) return BigDecimal.ZERO;
+        UserCoupon u=owned.lockById(id);
+        discount(userId, u, total);
         u.setStatus("locked"); u.setUsedOrderId(orderId); owned.updateById(u); return u.getAmount();
+    }
+    @Transactional public void releaseCheckout(Long userId, Long couponId, Long orderId) {
+        if (couponId==null) return;
+        UserCoupon u=owned.lockById(couponId);
+        if (u==null || !userId.equals(u.getUserId()) || !"locked".equals(u.getStatus())
+                || !java.util.Objects.equals(orderId,u.getUsedOrderId())) throw error("优惠券预占归属不一致");
+        owned.update(null,Wrappers.<UserCoupon>lambdaUpdate().eq(UserCoupon::getId,u.getId())
+                .set(UserCoupon::getStatus,u.getExpireTime().isAfter(LocalDateTime.now())?"unused":"expired")
+                .set(UserCoupon::getUsedOrderId,null).set(UserCoupon::getUpdateTime,LocalDateTime.now()));
     }
     @Transactional public void release(Order order) {
         if(order.getUserCouponId()==null) return;

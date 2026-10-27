@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -43,7 +43,14 @@ class AdminCatalogIntegrationTests {
     @Autowired RoleMapper roles;
     @Autowired AdminAccessMapper access;
     @Autowired OrderService orders;
+    @Autowired com.gas.ecommerce.modules.order.service.CheckoutSettlementService checkoutSettlement;
+    @Autowired com.gas.ecommerce.modules.order.service.OrderSubmissionStore orderSubmissions;
+    @Autowired com.gas.ecommerce.modules.order.service.CheckoutCompensationService checkoutCompensation;
+    @Autowired com.gas.ecommerce.modules.order.service.OrderInventoryService checkoutInventory;
+    @Autowired com.gas.ecommerce.modules.marketing.service.CheckoutMarketingService checkoutMarketing;
+    @MockitoBean com.gas.ecommerce.modules.order.service.CheckoutPointsGateway checkoutPoints;
     @Autowired com.gas.ecommerce.modules.payment.service.PaymentService payments;
+    @MockitoBean com.gas.ecommerce.modules.order.service.OrderLogisticsGateway orderLogistics;
     @MockitoBean OrderNoGenerator orderNumbers;
     @MockitoBean com.gas.ecommerce.common.utils.PaymentNoGenerator paymentNumbers;
     String bearer;
@@ -106,7 +113,7 @@ class AdminCatalogIntegrationTests {
         assertEquals("refunded",db.queryForObject("SELECT status FROM payment WHERE id=?",String.class,id));
     }
 
-    @Test void expiredAndCancelledOrdersCannotBePaid() throws Exception {
+    @Test void expiredCreationIsRejectedAndCancelledPaymentIsRefunded() throws Exception {
         org.mockito.Mockito.when(paymentNumbers.next()).thenReturn("PAY-TEST-2");
         db.update("INSERT INTO `order`(id,order_no,user_id,status,total_amount,pay_amount,expire_time) VALUES(501,'EXPIRED-ORDER',100,'pending_payment',50,50,?)",java.time.LocalDateTime.now().minusMinutes(1));
         mvc.perform(post("/api/v1/payments").header("Authorization",userBearer).contentType("application/json").content("{\"orderId\":501,\"channel\":\"test\"}"))
@@ -115,7 +122,7 @@ class AdminCatalogIntegrationTests {
         mvc.perform(post("/api/v1/payments").header("Authorization",userBearer).contentType("application/json").content("{\"orderId\":501,\"channel\":\"test\"}"))
                 .andExpect(status().isOk());
         db.update("UPDATE `order` SET status='cancelled' WHERE id=501");
-        signedPaymentCallback("{\"paymentNo\":\"PAY-TEST-2\",\"transactionNo\":\"TX-2\",\"amount\":50,\"status\":\"success\",\"eventTime\":\"2026-10-22 12:00:00\"}",400);
+        signedPaymentCallback("{\"paymentNo\":\"PAY-TEST-2\",\"transactionNo\":\"TX-2\",\"amount\":50,\"status\":\"success\",\"eventTime\":\"2026-10-22 12:00:00\"}",200);
         assertEquals("cancelled",db.queryForObject("SELECT status FROM `order` WHERE id=501",String.class));
     }
 
@@ -530,6 +537,199 @@ class AdminCatalogIntegrationTests {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/v1/cart").header("Authorization", userBearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalQuantity").value(0));
+    }
+
+    @Test void failedSubmissionIsImmediatelyCompensatableWithCoarseDatabaseTimestamps() {
+        // Reproduce a DATETIME(0) backend: rounding must not defer an immediate release into the future.
+        db.execute("ALTER TABLE order_submission MODIFY COLUMN lease_until DATETIME(0)");
+        db.execute("ALTER TABLE order_submission MODIFY COLUMN next_attempt_time DATETIME(0)");
+        for (int i=0;i<8;i++) {
+            var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(1L,null,"precision-"+i);
+            var claim=orderSubmissions.claim(100L,request);
+            assertTrue(orderSubmissions.fail(claim,new IllegalStateException("failed before resources")));
+            checkoutCompensation.compensate(claim.orderNo());
+            assertEquals("FAILED",db.queryForObject("SELECT phase FROM order_submission WHERE order_no=?",String.class,claim.orderNo()));
+        }
+    }
+
+    @Test void checkoutFreightFullReductionAndCouponAreCalculatedByOwnerServices() throws Exception {
+        long c=category(0,"Freight checkout"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",product);
+        long address=createAddress(userBearer,"13800138000",true), owned=claimCoupon(coupon(2));
+        db.update("INSERT INTO checkout_delivery_rule(province,city,district,reachable,freight_amount) VALUES('*','*','*',FALSE,7.50)");
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned)));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_checkout_ticket",Integer.class));
+        db.update("UPDATE checkout_delivery_rule SET reachable=TRUE");
+        db.update("INSERT INTO checkout_full_reduction(minimum_amount,discount_amount,start_time,end_time) VALUES(100,10,?,?)",java.time.LocalDateTime.now().minusDays(1),java.time.LocalDateTime.now().plusDays(1));
+        var quote=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned));
+        assertEquals(0,new java.math.BigDecimal("77.50").compareTo(quote.payAmount()));
+        assertEquals(0,new java.math.BigDecimal("10").compareTo(quote.fullReductionAmount()));
+        assertNotEquals(quote.checkoutToken(),db.queryForObject("SELECT token_hash FROM order_checkout_ticket",String.class));
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,quote.orderNo(),quote.checkoutToken());
+        var order=orders.create(100L,request);
+        assertEquals(0,quote.payAmount().compareTo(order.payAmount()));
+        assertEquals(0,quote.freightAmount().compareTo(order.freightAmount()));
+        assertEquals("locked",couponState(owned));
+        assertEquals("SUCCEEDED",db.queryForObject("SELECT phase FROM order_submission",String.class));
+        checkoutCompensation.compensate(order.orderNo());
+        assertEquals(1,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+    }
+
+    @Test void checkoutTokenSupportsClickRetriesAndRejectsDifferentPayloadOrHeader() throws Exception {
+        long c=category(0,"Token checkout"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",product);
+        long address=createAddress(userBearer,"13800138000",true);
+        var quote=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,null));
+        String body=json.writeValueAsString(Map.of("addressId",address,"orderNo",quote.orderNo(),"checkoutToken",quote.checkoutToken(),"payAmount",0.01));
+        mvc.perform(post("/api/v1/orders").header("Authorization",userBearer).header("Idempotency-Key","wrong").contentType("application/json").content(body)).andExpect(status().isBadRequest());
+        for (int i=0;i<3;i++) mvc.perform(post("/api/v1/orders").header("Authorization",userBearer).header("Idempotency-Key",quote.checkoutToken()).contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.orderNo").value(quote.orderNo())).andExpect(jsonPath("$.data.payAmount").value(100));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM order_outbox",Integer.class));
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.create(100L,
+                new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,"different remark",null,null,quote.orderNo(),quote.checkoutToken())));
+    }
+
+    @Test void expiredSubmissionIsCompensatedAfterCrashAndLateReservationsAreFenced() throws Exception {
+        long c=category(0,"Crash recovery"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",product);
+        long address=createAddress(userBearer,"13800138000",true), owned=claimCoupon(coupon(2));
+        var preview=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned));
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,preview.orderNo(),preview.checkoutToken());
+        var claim=orderSubmissions.claim(100L,request);
+        var quote=checkoutSettlement.settle(100L,address,owned);
+        checkoutInventory.lockCheckout(claim.orderNo(),quote.items());
+        checkoutInventory.lockCheckout(claim.orderNo(),quote.items()); // Lost reservation reply, same command retried.
+        checkoutMarketing.reserve(claim.orderNo(),100L,owned,quote.total(),quote.marketing());
+        checkoutMarketing.reserve(claim.orderNo(),100L,owned,quote.total(),quote.marketing());
+        assertEquals(1,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        db.update("UPDATE order_submission SET lease_until=?,next_attempt_time=?",java.time.LocalDateTime.now().minusMinutes(1),java.time.LocalDateTime.now().minusMinutes(1));
+        checkoutCompensation.recover(); checkoutCompensation.recover();
+        assertEquals("FAILED",db.queryForObject("SELECT phase FROM order_submission",String.class));
+        assertEquals("unused",couponState(owned));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->checkoutInventory.lockCheckout(claim.orderNo(),quote.items()));
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->checkoutMarketing.reserve(claim.orderNo(),100L,owned,quote.total(),quote.marketing()));
+        assertThrows(com.gas.ecommerce.modules.order.service.CheckoutConflictException.class,()->orders.create(100L,request));
+    }
+
+    @Test void uncertainPointsOutcomeAndFailedReleaseAreRetriedWithoutLeakingOtherResources() throws Exception {
+        long c=category(0,"Compensation retry"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",product);
+        long address=createAddress(userBearer,"13800138000",true), owned=claimCoupon(coupon(2));
+        var preview=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned));
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,preview.orderNo(),preview.checkoutToken());
+        org.mockito.Mockito.doThrow(new IllegalStateException("reply lost")).when(checkoutPoints).reserve(preview.orderNo(),100L);
+        org.mockito.Mockito.doThrow(new IllegalStateException("points offline")).when(checkoutPoints).release(preview.orderNo());
+        assertThrows(IllegalStateException.class,()->orders.create(100L,request));
+        assertEquals("COMPENSATING",db.queryForObject("SELECT phase FROM order_submission",String.class));
+        assertEquals("unused",couponState(owned));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        org.mockito.Mockito.doNothing().when(checkoutPoints).release(preview.orderNo());
+        db.update("UPDATE order_submission SET lease_until=?,next_attempt_time=?",java.time.LocalDateTime.now().minusMinutes(1),java.time.LocalDateTime.now().minusMinutes(1));
+        checkoutCompensation.recover();
+        assertEquals("FAILED",db.queryForObject("SELECT phase FROM order_submission",String.class));
+        org.mockito.Mockito.verify(checkoutPoints,org.mockito.Mockito.times(2)).release(preview.orderNo());
+    }
+
+    @Test void checkoutPreviewHasNoResourceSideEffectsAndAllocatesCoupon() throws Exception {
+        long c=category(0,"Preview"), first=product(c), second=product(c);
+        setProductStatus(first,"on_sale",200); setProductStatus(second,"on_sale",200);
+        db.update("UPDATE product SET price=33.33 WHERE id=?",first);
+        db.update("UPDATE product SET price=66.67 WHERE id=?",second);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,3,0),(?,3,0)",first,second);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1),(100,?,1,1)",first,second);
+        long address=createAddress(userBearer,"13800138000",true), owned=claimCoupon(coupon(2));
+        var result=mvc.perform(post("/api/v1/orders/preview").header("Authorization",userBearer)
+                .contentType("application/json").content(json.writeValueAsString(Map.of("addressId",address,"userCouponId",owned,"payAmount",0.01))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalAmount").value(100))
+                .andExpect(jsonPath("$.data.discountAmount").value(20)).andExpect(jsonPath("$.data.payAmount").value(80))
+                .andExpect(jsonPath("$.data.items[0].discountAmount").value(6.66))
+                .andExpect(jsonPath("$.data.items[1].discountAmount").value(13.34)).andReturn();
+        String number=json.readTree(result.getResponse().getContentAsString()).at("/data/orderNo").asText();
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_outbox",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals("unused",couponState(owned));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM cart_item WHERE is_deleted=0",Integer.class));
+        var order=orders.create(100L,new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,number,json.readTree(result.getResponse().getContentAsString()).at("/data/checkoutToken").asText()));
+        assertEquals(number,order.orderNo());
+        assertEquals(0,order.payAmount().compareTo(new java.math.BigDecimal("80")));
+        assertEquals(0,order.items().stream().map(i->i.payAmount()).reduce(java.math.BigDecimal.ZERO,java.math.BigDecimal::add).compareTo(order.payAmount()));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM order_outbox",Integer.class));
+    }
+
+    @Test void previewOrderNumberIsOwnedExpiresAndRejectsChangedPrices() throws Exception {
+        long c=category(0,"Preview validation"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1),(101,?,1,1)",product,product);
+        long address=createAddress(userBearer,"13800138000",true), otherAddress=createAddress(secondUserBearer,"13800138001",true);
+        var quote=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,null));
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.create(101L,
+                new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(otherAddress,null,null,null,quote.orderNo(),quote.checkoutToken())));
+        db.update("UPDATE product SET price=101 WHERE id=?",product);
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,null,quote.orderNo(),quote.checkoutToken());
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.create(100L,request));
+        db.update("UPDATE product SET price=100 WHERE id=?",product);
+        db.update("UPDATE order_checkout_ticket SET expire_time=? WHERE order_no=?",java.time.LocalDateTime.now().minusMinutes(1),quote.orderNo());
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.create(100L,request));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        mvc.perform(post("/api/v1/orders").header("Authorization",userBearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("addressId",address)))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/orders/preview").contentType("application/json").content(json.writeValueAsString(Map.of("addressId",address))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test void concurrentPreviewSubmissionCreatesOneOrderAndRetrySurvivesExpiry() throws Exception {
+        long c=category(0,"Concurrent checkout"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,2,1)",product);
+        long address=createAddress(userBearer,"13800138000",true);
+        var quote=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,null));
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,null,quote.orderNo(),quote.checkoutToken());
+        try (var executor=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var start=new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.Callable<Long> submit=()->{start.await();return orders.create(100L,request).id();};
+            var first=executor.submit(submit); var second=executor.submit(submit); start.countDown();
+            assertEquals(first.get(15,java.util.concurrent.TimeUnit.SECONDS),second.get(15,java.util.concurrent.TimeUnit.SECONDS));
+        }
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        assertEquals(2,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM order_outbox",Integer.class));
+        db.update("UPDATE order_checkout_ticket SET expire_time=?",java.time.LocalDateTime.now().minusDays(1));
+        assertEquals(quote.orderNo(),orders.create(100L,request).orderNo());
+    }
+
+    @Test void failureWritingOutboxRollsBackOrderCouponStockAndCartThenAllowsRetry() throws Exception {
+        long c=category(0,"Checkout rollback"), product=product(c);
+        setProductStatus(product,"on_sale",200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,5,0)",product);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)",product);
+        long address=createAddress(userBearer,"13800138000",true), owned=claimCoupon(coupon(2));
+        var quote=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned));
+        var request=new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,quote.orderNo(),quote.checkoutToken());
+        db.update("INSERT INTO order_outbox(order_no,event_type,status,attempts,next_attempt_time) VALUES(?,'order.created','pending',0,CURRENT_TIMESTAMP)",quote.orderNo());
+        assertThrows(org.springframework.dao.DuplicateKeyException.class,()->orders.create(100L,request));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM `order`",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_item",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_stock_reservation WHERE status='reserved'",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals("unused",couponState(owned));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM cart_item WHERE is_deleted=0",Integer.class));
+        db.update("DELETE FROM order_outbox");
+        var retry=orders.preview(100L,new com.gas.ecommerce.modules.order.dto.OrderPreviewRequest(address,owned));
+        assertEquals(retry.orderNo(),orders.create(100L,new com.gas.ecommerce.modules.order.dto.OrderCreateRequest(address,null,null,owned,retry.orderNo(),retry.checkoutToken())).orderNo());
     }
 
     @Test void orderCreationSnapshotsDataReservesStockAndIsIdempotent() throws Exception {
@@ -1224,5 +1424,86 @@ class AdminCatalogIntegrationTests {
         assertEquals(0,inventoryService.detail(id).availableQuantity());
     }
 
+
+    private void readOrder(long id,long user,String state) {
+        db.update("INSERT INTO `order`(id,order_no,user_id,status,total_amount,pay_amount,create_time,expire_time) VALUES(?,?,?,?,50,50,?,?)",
+                id,"READ-"+id,user,state,java.time.LocalDateTime.now().minusMinutes(2).withNano(0),java.time.LocalDateTime.now().plusMinutes(28));
+    }
+    @Test void orderTabsPaginateAndNeverTrustUserIdFromRequest() throws Exception {
+        readOrder(900,100,"paid");readOrder(901,100,"pending_payment");readOrder(902,101,"paid");readOrder(903,100,"paid");
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer).param("status","paid").param("size","1").param("page","1").param("userId","101"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2)).andExpect(jsonPath("$.data.list[0].id").value(903));
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer).param("status","paid").param("size","1").param("page","2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].id").value(900));
+        mvc.perform(get("/api/v1/orders").header("Authorization",secondUserBearer)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1)).andExpect(jsonPath("$.data.list[0].id").value(902));
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer).param("status","bogus")).andExpect(status().isBadRequest());
+    }
+    @Test void orderCursorHandlesEqualTimestampsAndRejectsForeignAnchorAndDeepOffset() throws Exception {
+        readOrder(900,100,"paid");readOrder(901,100,"paid");readOrder(902,101,"paid");
+        db.update("UPDATE `order` SET create_time='2026-10-01 12:00:00'");
+        mvc.perform(get("/api/v1/orders/scroll").header("Authorization",userBearer).param("size","1").param("status","paid"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].id").value(901)).andExpect(jsonPath("$.data.nextCursor").value(901));
+        mvc.perform(get("/api/v1/orders/scroll").header("Authorization",userBearer).param("size","1").param("afterId","901").param("status","paid"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].id").value(900)).andExpect(jsonPath("$.data.hasMore").value(false));
+        mvc.perform(get("/api/v1/orders/scroll").header("Authorization",userBearer).param("afterId","902")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/orders/scroll").header("Authorization",userBearer).param("afterId","901").param("status","completed")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer).param("page","502")).andExpect(status().isBadRequest());
+    }
+    @Test void orderHorizontalAuthorizationCoversDetailCancelAndReceipt() throws Exception {
+        readOrder(900,101,"pending_payment");readOrder(901,101,"processing");
+        mvc.perform(get("/api/v1/orders/900").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/orders/900/cancel").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/orders/901/confirm-receipt").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_status_log",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_close_release",Integer.class));
+        assertEquals("pending_payment",db.queryForObject("SELECT status FROM `order` WHERE id=900",String.class));
+        assertEquals("processing",db.queryForObject("SELECT status FROM `order` WHERE id=901",String.class));
+    }
+    @Test void orderDetailAggregatesTimelinePaymentsAndHidesUnavailableLogistics() throws Exception {
+        readOrder(900,100,"paid");
+        db.update("INSERT INTO order_item(order_id,product_id,product_name,quantity,unit_price,amount) VALUES(900,1,'Snapshot',1,50,50)");
+        db.update("INSERT INTO order_status_log(order_id,from_status,to_status) VALUES(900,NULL,'pending_payment'),(900,'pending_payment','paid')");
+        db.update("INSERT INTO payment(payment_no,order_id,user_id,amount,channel,status,provider_transaction_no) VALUES('READ-P',900,100,50,'test','success','PRIVATE-TRADE'),('FOREIGN-P',900,101,50,'test','failed',NULL)");
+        org.mockito.Mockito.when(orderLogistics.find(100L,"READ-900")).thenThrow(new IllegalStateException("timeout"));
+        mvc.perform(get("/api/v1/orders/900").header("Authorization",userBearer)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].productName").value("Snapshot"))
+                .andExpect(jsonPath("$.data.timeline.length()").value(2)).andExpect(jsonPath("$.data.timeline[1].toStatus").value("paid"))
+                .andExpect(jsonPath("$.data.payments.length()").value(1)).andExpect(jsonPath("$.data.payments[0].paymentNo").value("READ-P"))
+                .andExpect(jsonPath("$.data.payments[0].providerTransactionNo").doesNotExist()).andExpect(jsonPath("$.data.logistics").doesNotExist());
+        org.mockito.Mockito.doReturn(new com.gas.ecommerce.modules.order.vo.OrderLogisticsVO("Carrier","TRACK","In transit")).when(orderLogistics).find(100L,"READ-900");
+        mvc.perform(get("/api/v1/orders/900").header("Authorization",userBearer)).andExpect(status().isOk()).andExpect(jsonPath("$.data.logistics.trackingNo").value("TRACK"));
+    }
+    @Test void orderCancelIsIdempotentAndOnlyPendingCanBeCancelled() throws Exception {
+        readOrder(900,100,"pending_payment");readOrder(901,100,"paid");
+        for(int i=0;i<2;i++) mvc.perform(put("/api/v1/orders/900/cancel").header("Authorization",userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("cancelled"));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM order_status_log WHERE order_id=900 AND to_status='cancelled'",Integer.class));
+        assertEquals(3,db.queryForObject("SELECT step FROM order_close_release WHERE order_id=900",Integer.class));
+        org.mockito.Mockito.verify(checkoutPoints,org.mockito.Mockito.times(1)).release("READ-900");
+        mvc.perform(put("/api/v1/orders/901/cancel").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+    }
+    @Test void orderReceiptConcurrentRetriesProduceOneTransition() throws Exception {
+        readOrder(900,100,"processing");readOrder(901,100,"pending_payment");
+        var start=new java.util.concurrent.CountDownLatch(1);
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var a=pool.submit(()->{start.await();return orders.confirmReceipt(100L,900L);});
+            var b=pool.submit(()->{start.await();return orders.confirmReceipt(100L,900L);});start.countDown();
+            assertEquals("completed",a.get(10,java.util.concurrent.TimeUnit.SECONDS).status());assertEquals("completed",b.get(10,java.util.concurrent.TimeUnit.SECONDS).status());
+        }
+        mvc.perform(put("/api/v1/orders/900/confirm-receipt").header("Authorization",userBearer)).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("completed"));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM order_status_log WHERE order_id=900 AND to_status='completed'",Integer.class));
+        mvc.perform(put("/api/v1/orders/901/confirm-receipt").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+    }
+    @Test void orderOperationsRequireActiveAuthenticatedUser() throws Exception {
+        readOrder(900,100,"processing");
+        mvc.perform(get("/api/v1/orders/900")).andExpect(status().isUnauthorized());
+        db.update("UPDATE `user` SET status='inactive' WHERE id=100");
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/orders/scroll").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/orders/900").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/orders/900/cancel").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/orders/900/confirm-receipt").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+    }
 }
 

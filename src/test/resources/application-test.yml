@@ -1,5 +1,6 @@
 app:
   security:
+    login-disabled: false
     local-management-bypass: false
   addresses:
     require-region-codes-at-checkout: false

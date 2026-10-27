@@ -3,6 +3,7 @@ import { session } from '../platform/session'
 import { adminDemoMode } from '../api/admin'
 import { hasAdminAccess } from '../admin/access'
 import { modules } from '../admin/adminData'
+import { loginDisabled } from '../platform/testMode'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -73,12 +74,14 @@ export const router = createRouter({
   ],
 })
 router.beforeEach((to) => {
+  if (loginDisabled && to.path === '/admin/login') return '/admin'
+  if (loginDisabled && to.path === '/login') return '/account'
   const localManagementBypass = import.meta.env.DEV && import.meta.env.VITE_LOCAL_MANAGEMENT_BYPASS !== 'false'
     && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
     && ['employees', 'roles'].includes(String(to.params.module))
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (to.params.module && !Object.hasOwn(modules, String(to.params.module))) return '/admin'
-    if (!localManagementBypass && !adminDemoMode && !hasAdminAccess())
+    if (!loginDisabled && !localManagementBypass && !adminDemoMode && !hasAdminAccess())
       return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
   if (to.meta.requiresAuth && !session.read())

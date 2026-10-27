@@ -2,8 +2,10 @@ server:
   port: 8080
 app:
   security:
+    # Temporary global no-login testing; restore with LOGIN_DISABLED=false.
+    login-disabled: ${LOGIN_DISABLED:true}
     # Temporary local personnel/role management testing. Set false to restore login.
-    local-management-bypass: ${LOCAL_MANAGEMENT_BYPASS:true}
+    local-management-bypass: ${LOCAL_MANAGEMENT_BYPASS:false}
   addresses:
     require-region-codes-at-checkout: ${ADDRESS_REQUIRE_REGION_CODES:true}
     geocoding-url: ${ADDRESS_GEOCODING_URL:}

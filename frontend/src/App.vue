@@ -13,6 +13,7 @@ import {
 import { useCartStore } from './stores/cart'
 import { useAuthStore } from './stores/auth'
 import AdminApp from './admin/AdminApp.vue'
+import { loginDisabled } from './platform/testMode'
 const cart = useCartStore()
 const auth = useAuthStore()
 const router = useRouter()
@@ -26,6 +27,7 @@ const links = [
   { to: '/account', label: '我的', icon: UserRound },
 ]
 function expired() {
+  if (loginDisabled) return
   auth.logout()
   const current = router.currentRoute.value
   if (current.path.startsWith('/admin'))

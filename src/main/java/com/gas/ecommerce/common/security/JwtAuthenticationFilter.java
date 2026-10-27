@@ -21,9 +21,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider tokens;
     @org.springframework.beans.factory.annotation.Value("${app.security.local-management-bypass:false}")
     private boolean localManagementBypass;
+    @org.springframework.beans.factory.annotation.Value("${app.security.login-disabled:false}")
+    private boolean loginDisabled;
+    @org.springframework.beans.factory.annotation.Autowired
+    private TestIdentityService testIdentity;
     private final com.gas.ecommerce.modules.auth.service.AdminAuthService admins;
     public JwtAuthenticationFilter(JwtTokenProvider tokens, com.gas.ecommerce.modules.auth.service.AdminAuthService admins) { this.tokens = tokens; this.admins = admins; }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+        if (loginDisabled) {
+            testIdentity.ensureUser();
+            var authorities = java.util.stream.Stream.of("ROLE_ADMIN", "ROLE_USER", "TEST_LOGIN_BYPASS")
+                    .map(SimpleGrantedAuthority::new).toList();
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(TestIdentityService.USER_ID, null, authorities));
+            chain.doFilter(request, response);
+            return;
+        }
         String path = request.getServletPath();
         String remote = request.getRemoteAddr();
         boolean local = "127.0.0.1".equals(remote) || "::1".equals(remote) || "0:0:0:0:0:0:0:1".equals(remote);

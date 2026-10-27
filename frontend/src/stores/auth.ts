@@ -3,11 +3,12 @@ import { computed, ref } from 'vue'
 import { authApi } from '../api/auth'
 import { session } from '../platform/session'
 import type { CurrentUser } from '../api/types'
+import { loginDisabled } from '../platform/testMode'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(session.read()?.token || '')
-  const user = ref<CurrentUser | null>(null)
-  const authenticated = computed(() => !!token.value && !!session.read())
+  const user = ref<CurrentUser | null>(loginDisabled ? { userId: '-1' } : null)
+  const authenticated = computed(() => loginDisabled || (!!token.value && !!session.read()))
   async function login(phone: string, code: string) {
     const result = await authApi.login(phone, code)
     session.write(result.accessToken, result.expiresIn)

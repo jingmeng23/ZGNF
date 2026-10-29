@@ -92,7 +92,11 @@ public class MallPersonalService {
     private void updateHistoryCache(Long user, Long product) {
         try {
             String key = historyKey(user);
-            redis.opsForZSet().add(key, product.toString(), System.currentTimeMillis() * 1000.0 + System.nanoTime() % 1000);
+            List<java.sql.Timestamp> timestamps = db.query(
+                    "SELECT viewed_at FROM mall_history WHERE user_id=? AND product_id=?",
+                    (r, n) -> r.getTimestamp(1), user, product);
+            if (timestamps.isEmpty()) return;
+            redis.opsForZSet().add(key, product.toString(), historyScore(timestamps.getFirst()));
             redis.opsForZSet().removeRange(key, 0, -(capacity + 1L));
             List<Long> activeIds = db.query("SELECT product_id FROM mall_history WHERE user_id=?", (r, n) -> r.getLong(1), user);
             Set<String> active = activeIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.toSet());
@@ -127,11 +131,16 @@ public class MallPersonalService {
             redis.delete(key);
             db.query("SELECT product_id, viewed_at FROM mall_history WHERE user_id=? ORDER BY viewed_at,product_id",
                     (org.springframework.jdbc.core.RowCallbackHandler) r -> redis.opsForZSet().add(key,
-                            Long.toString(r.getLong(1)), r.getTimestamp(2).getTime()), user);
+                            Long.toString(r.getLong(1)), historyScore(r.getTimestamp(2))), user);
             redis.expire(key, java.time.Duration.ofDays(180));
         } catch (RedisConnectionFailureException ignored) {
             // Database reads remain available if cache rebuild cannot reach Redis.
         }
+    }
+
+    private double historyScore(java.sql.Timestamp timestamp) {
+        var instant = timestamp.toInstant();
+        return instant.getEpochSecond() * 1_000_000.0 + instant.getNano() / 1_000;
     }
 
     @Transactional
@@ -154,7 +163,7 @@ public class MallPersonalService {
         List<Long> ids = history ? historyPage(user, q) : null;
         if (history && ids.isEmpty()) entries = List.of();
         else {
-            String order = history ? " FIELD(product_id," + String.join(",", ids.stream().map(String::valueOf).toList()) + ")" : time + " DESC,product_id DESC";
+            String order = time + " DESC,product_id DESC";
             String sql = "SELECT product_id," + time + " FROM " + table + " WHERE user_id=?"
                     + (history ? " AND product_id IN (" + String.join(",", Collections.nCopies(ids.size(), "?")) + ")" : "")
                     + " ORDER BY " + order + (history ? "" : " LIMIT ? OFFSET ?");
@@ -165,6 +174,11 @@ public class MallPersonalService {
                 entry.put("productId", r.getLong(1)); entry.put("time", r.getTimestamp(2).toLocalDateTime());
                 return entry;
             }, args.toArray());
+            if (history) {
+                Map<Long, Integer> ranks = new HashMap<>();
+                for (int i = 0; i < ids.size(); i++) ranks.put(ids.get(i), i);
+                rows.sort(Comparator.comparingInt(row -> ranks.get((Long) row.get("productId"))));
+            }
             List<Long> productIds = rows.stream().map(row -> (Long) row.get("productId")).toList();
             Map<Long, com.gas.ecommerce.modules.mall.vo.MallViews.Card> cards = catalog.cards(productIds);
             for (Map<String, Object> row : rows) {

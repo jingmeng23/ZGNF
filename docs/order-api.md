@@ -2,6 +2,8 @@
 
 结算预览、提交顺序、Token 幂等、聚合降级、资源补偿、订单号和测试说明见 [结算预览与提交订单](order-checkout.md)。
 
+管理端关闭、发货、物流修改、内部备注、操作记录和前端入口详见 [订单管理补齐功能](order-management.md)。数据库需升级至 `V1.21__admin_order_operations.sql`。
+
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | POST | /api/v1/orders/preview | 从当前用户已选购物车项聚合结算，签发 Token |

@@ -9,9 +9,65 @@ export const router = createRouter({
   history: createWebHashHistory(),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
-    { path: '/addresses', component: () => import('../views/AddressesView.vue'), meta: { title: '\u6536\u8d27\u5730\u5740', requiresAuth: true } },
-    { path: '/favorites', component: () => import('../views/MallPersonalView.vue'), meta: { title: '我的收藏', requiresAuth: true } },
-    { path: '/history', component: () => import('../views/MallPersonalView.vue'), meta: { title: '浏览足迹', requiresAuth: true } },
+    { path: '/admin/employees', component: () => import('../admin/AdminEmployees.vue'), meta: { title: '员工管理' } },
+    { path: '/admin/roles', component: () => import('../admin/AdminRoles.vue'), meta: { title: '角色权限' } },
+    {
+      path: '/aftersales',
+      component: () => import('../views/AftersalesView.vue'),
+      meta: { title: '我的售后', requiresAuth: true },
+    },
+    { path: '/work-orders', component: () => import('../views/WorkOrdersView.vue'), meta: { title: '我的工单', requiresAuth: true } },
+    { path: '/admin/work-orders', component: () => import('../admin/AdminWorkOrders.vue'), meta: { title: '工单管理' } },
+    {
+      path: '/admin/aftersales',
+      component: () => import('../admin/AdminAftersales.vue'),
+      meta: { title: '售后管理' },
+    },
+    {
+      path: '/admin/categories',
+      component: () => import('../admin/AdminCategories.vue'),
+      meta: { title: '分类管理' },
+    },
+    {
+      path: '/admin/orders',
+      component: () => import('../admin/AdminOrders.vue'),
+      meta: { title: '订单管理' },
+    },
+    {
+      path: '/admin/products',
+      component: () => import('../admin/AdminProducts.vue'),
+      meta: { title: '商品管理' },
+    },
+    {
+      path: '/admin/inventory',
+      component: () => import('../admin/AdminInventory.vue'),
+      meta: { title: '库存管理' },
+    },
+    {
+      path: '/coupons',
+      component: () => import('../views/CouponsView.vue'),
+      meta: { title: '优惠券', requiresAuth: true },
+    },
+    {
+      path: '/admin/coupons',
+      component: () => import('../admin/AdminCoupons.vue'),
+      meta: { title: '优惠券管理' },
+    },
+    {
+      path: '/addresses',
+      component: () => import('../views/AddressesView.vue'),
+      meta: { title: '\u6536\u8d27\u5730\u5740', requiresAuth: true },
+    },
+    {
+      path: '/favorites',
+      component: () => import('../views/MallPersonalView.vue'),
+      meta: { title: '我的收藏', requiresAuth: true },
+    },
+    {
+      path: '/history',
+      component: () => import('../views/MallPersonalView.vue'),
+      meta: { title: '浏览足迹', requiresAuth: true },
+    },
     {
       path: '/admin/login',
       component: () => import('../admin/AdminLogin.vue'),
@@ -76,9 +132,11 @@ export const router = createRouter({
 router.beforeEach((to) => {
   if (loginDisabled && to.path === '/admin/login') return '/admin'
   if (loginDisabled && to.path === '/login') return '/account'
-  const localManagementBypass = import.meta.env.DEV && import.meta.env.VITE_LOCAL_MANAGEMENT_BYPASS !== 'false'
-    && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-    && ['employees', 'roles'].includes(String(to.params.module))
+  const localManagementBypass =
+    import.meta.env.DEV &&
+    import.meta.env.VITE_LOCAL_MANAGEMENT_BYPASS !== 'false' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) &&
+    (to.path === '/admin/employees' || ['employees', 'roles'].includes(String(to.params.module)))
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (to.params.module && !Object.hasOwn(modules, String(to.params.module))) return '/admin'
     if (!loginDisabled && !localManagementBypass && !adminDemoMode && !hasAdminAccess())

@@ -24,6 +24,13 @@ public class InventoryServiceImpl extends ServiceImpl<InventoryMapper, Inventory
     private final RowMapper<InventoryLogVO> logMapper=(r,n)->new InventoryLogVO(r.getLong("id"),r.getObject("inventory_id",Long.class),r.getLong("product_id"),r.getObject("store_id",Long.class),r.getString("change_type"),r.getInt("change_quantity"),integer(r,"quantity_before"),integer(r,"quantity_after"),integer(r,"locked_before"),integer(r,"locked_after"),r.getObject("operator_id",Long.class),r.getString("request_id"),r.getString("reference_no"),r.getString("remark"),r.getTimestamp("create_time").toLocalDateTime());
     private static Integer integer(ResultSet r,String name) throws SQLException { return r.getObject(name,Integer.class); }
 
+    @Override public InventoryOptionsVO options() {
+        RowMapper<InventoryOptionsVO.Option> mapper = (r,n) -> new InventoryOptionsVO.Option(r.getLong("id"),r.getString("name"));
+        return new InventoryOptionsVO(
+                jdbc.query("SELECT id,name FROM product WHERE is_deleted=0 ORDER BY name,id",mapper),
+                jdbc.query("SELECT id,name FROM store WHERE is_deleted=0 AND status='active' ORDER BY name,id",mapper));
+    }
+
     @Override public PageResult<InventoryVO> list(InventoryQuery q) {
         StringBuilder where=new StringBuilder(" WHERE i.is_deleted=0"); List<Object> args=new ArrayList<>();
         filter(where,args,"i.product_id",q.getProductId()); warehouse(where,args,"i.",q.getStoreId(),q.getHeadquarters());

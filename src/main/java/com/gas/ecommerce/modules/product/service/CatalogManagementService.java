@@ -24,10 +24,12 @@ public class CatalogManagementService {
     private final CategoryMapper categories;
     private final BrandMapper brands;
     private final InventoryMapper inventory;
+    private final org.springframework.jdbc.core.JdbcTemplate db;
     private final CatalogLockMapper locks; private final org.springframework.context.ApplicationEventPublisher events;
 
     public CatalogManagementService(ProductMapper products, CategoryMapper categories, BrandMapper brands,
-            InventoryMapper inventory, CatalogLockMapper locks, org.springframework.context.ApplicationEventPublisher events) { this.events = events;
+            InventoryMapper inventory, CatalogLockMapper locks, org.springframework.context.ApplicationEventPublisher events,
+            org.springframework.jdbc.core.JdbcTemplate db) { this.events = events; this.db = db;
         this.products = products; this.categories = categories; this.brands = brands;
         this.inventory = inventory; this.locks = locks;
     }
@@ -50,6 +52,11 @@ public class CatalogManagementService {
     }
 
     public AdminProductVO product(Long id) { return views(List.of(requireProduct(id))).getFirst(); }
+
+    public ProductOptionsVO productOptions() {
+        return new ProductOptionsVO(categories(), brands.selectList(Wrappers.<Brand>lambdaQuery().orderByAsc(Brand::getName, Brand::getId))
+                .stream().map(b -> new ProductOptionsVO.BrandOption(b.getId(), b.getName(), b.getStatus())).toList());
+    }
 
     @Transactional
     public AdminProductVO create(ProductCreateRequest r) {
@@ -98,6 +105,24 @@ public class CatalogManagementService {
                 .stream().map(CategoryVO::from).toList();
     }
     public CategoryVO category(Long id) { return CategoryVO.from(requireCategory(id)); }
+
+    @Transactional(readOnly = true)
+    public List<AdminCategoryVO> categoryOverview() {
+        List<CategoryVO> all = categories();
+        Map<Long, Long> childCounts = all.stream().collect(Collectors.groupingBy(CategoryVO::parentId, Collectors.counting()));
+        Map<Long, Long> productCounts = new HashMap<>();
+        db.query("SELECT category_id,COUNT(*) FROM product WHERE is_deleted=0 GROUP BY category_id",
+                (org.springframework.jdbc.core.RowCallbackHandler) r -> productCounts.put(r.getLong(1), r.getLong(2)));
+        return all.stream().map(c -> new AdminCategoryVO(c.id(), c.parentId(), c.name(), c.sort(), c.status(),
+                childCounts.getOrDefault(c.id(), 0L), productCounts.getOrDefault(c.id(), 0L))).toList();
+    }
+
+    @Transactional
+    public CategoryVO categoryStatus(Long id, String status) {
+        lock();
+        Category c = requireCategory(id);
+        return updateCategory(id, new CategoryRequest(c.getParentId(), c.getName(), c.getSort(), status));
+    }
 
     @Transactional
     public CategoryVO createCategory(CategoryRequest r) {

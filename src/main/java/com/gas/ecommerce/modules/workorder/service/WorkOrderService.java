@@ -14,6 +14,11 @@ import com.gas.ecommerce.modules.workorder.vo.WorkOrderVO;
  * 业务服务接口，供 Controller 调用；继承 IService 后包含通用 CRUD 契约。
  */
 public interface WorkOrderService extends IService<WorkOrder> {
+    com.gas.ecommerce.modules.workorder.vo.WorkOrderOptionsVO options();
+    java.util.List<com.gas.ecommerce.modules.workorder.vo.WorkOrderOptionsVO.StoreOption> stores();
+    PageResult<WorkOrderVO> listAssigned(Long employeeId,WorkOrderQuery q);
+    WorkOrderVO detailAssigned(Long employeeId,Long id);
+    PageResult<WorkOrderLogVO> logsAssigned(Long employeeId,Long id,PageRequest q);
     WorkOrderVO create(Long userId,WorkOrderCreateRequest r);
     PageResult<WorkOrderVO> listMine(Long userId,WorkOrderQuery q);
     PageResult<WorkOrderVO> listAdmin(WorkOrderQuery q);

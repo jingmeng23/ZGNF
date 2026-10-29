@@ -17,5 +17,6 @@ public interface OrderService extends IService<Order> {
     PageResult<OrderVO> listAdmin(OrderQueryRequest query);
     OrderVO detailAdmin(Long id);
     OrderVO process(Long id);
+    OrderVO cancelAdmin(Long id);
     void cancelExpired(String orderNo);
 }

@@ -9,7 +9,7 @@ public record ProductCreateRequest(
         @Positive Long brandId,
         @NotBlank @Size(max = 200) String name,
         @Size(max = 500) String subtitle,
-        @Size(max = 512) String coverUrl,
+        @Size(max = 512) @Pattern(regexp = "^$|^(https?://|/(?!/))[^\\r\\n]*$") String coverUrl,
         @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal price,
         @DecimalMin("0.00") @Digits(integer = 8, fraction = 2) BigDecimal originalPrice,
         @Size(max = 16000) String description,

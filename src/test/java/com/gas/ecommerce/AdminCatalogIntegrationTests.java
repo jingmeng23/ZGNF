@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -198,6 +198,36 @@ class AdminCatalogIntegrationTests {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test void productEditorOptionsUseProductReadPermissionAndPreserveIds() throws Exception {
+        long category=category(0,"Editor category");
+        db.update("INSERT INTO brand(id,name,status,is_deleted) VALUES(9007199254740993,'Editor brand','active',0)");
+        mvc.perform(get("/api/v1/admin/products/options").header("Authorization",bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.categories[0].id").value(String.valueOf(category)))
+                .andExpect(jsonPath("$.data.brands[0].id").value("9007199254740993"))
+                .andExpect(jsonPath("$.data.brands[0].name").value("Editor brand"));
+        mvc.perform(get("/api/v1/admin/products/options")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/admin/products/options").header("Authorization",userBearer)).andExpect(status().isForbidden());
+    }
+
+    @Test void productImagesRejectUnsafeUrlsAndStatusFiltersReflectChanges() throws Exception {
+        long category=category(0,"Product validation");
+        mvc.perform(post("/api/v1/admin/products").header("Authorization",bearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("categoryId",category,"name","Unsafe cover","price",10,"coverUrl","javascript:alert(1)"))))
+                .andExpect(status().isBadRequest());
+        long product=product(category);
+        mvc.perform(get("/api/v1/admin/products").header("Authorization",bearer).param("status","draft").param("categoryId",String.valueOf(category)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        setProductStatus(product,"on_sale",200);
+        mvc.perform(get("/api/v1/admin/products").header("Authorization",bearer).param("status","draft"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        setProductStatus(product,"off_sale",200);
+        mvc.perform(get("/api/v1/admin/products").header("Authorization",bearer).param("status","off_sale"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].id").value(String.valueOf(product)));
+        mvc.perform(put("/api/v1/admin/products/"+product).header("Authorization",bearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("categoryId",category,"name","Unsafe update","price",10,"coverUrl","//untrusted.example/a.png"))))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test void catalogLifecyclePersistsDataAndSupportsPagination() throws Exception {
         long category = category(0, "Appliances");
         long product = product(category);
@@ -245,6 +275,87 @@ class AdminCatalogIntegrationTests {
         long product = product(child); setProductStatus(product, "on_sale", 200);
         mvc.perform(put("/api/v1/admin/categories/" + child).header("Authorization", bearer).contentType("application/json")
                         .content(categoryBody(root, "Child", "inactive"))).andExpect(status().isBadRequest());
+    }
+
+    @Test void categoryManagementCountsOnlyDirectUndeletedReferences() throws Exception {
+        long root = category(0, "Management root"), child = category(root, "Management child");
+        product(root); product(child);
+        long deletedProduct = product(root);
+        db.update("UPDATE product SET is_deleted=1 WHERE id=?", deletedProduct);
+        long deletedChild = category(root, "Deleted child");
+        mvc.perform(delete("/api/v1/admin/categories/" + deletedChild).header("Authorization", bearer)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].id").value(String.valueOf(root)))
+                .andExpect(jsonPath("$.data[0].childCount").value(1))
+                .andExpect(jsonPath("$.data[0].productCount").value(1))
+                .andExpect(jsonPath("$.data[1].childCount").value(0))
+                .andExpect(jsonPath("$.data[1].productCount").value(1));
+    }
+
+    @Test void categoryStatusPreservesMetadataAndEnforcesHierarchyAndPublicProductGuards() throws Exception {
+        long root = category(0, "Status root"), child = category(root, "Status child");
+        String url = "/api/v1/admin/categories/" + child + "/status";
+        mvc.perform(put("/api/v1/admin/categories/" + child).header("Authorization", bearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("name", "Sorted child", "parentId", root, "sort", 17, "status", "active"))))
+                .andExpect(status().isOk());
+        long p = product(child); setProductStatus(p, "on_sale", 200);
+        mvc.perform(put(url).header("Authorization", bearer).contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isBadRequest());
+        setProductStatus(p, "off_sale", 200);
+        mvc.perform(put(url).header("Authorization", bearer).contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("Sorted child"))
+                .andExpect(jsonPath("$.data.parentId").value(String.valueOf(root))).andExpect(jsonPath("$.data.sort").value(17));
+        mvc.perform(put("/api/v1/admin/categories/" + root + "/status").header("Authorization", bearer).contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/categories/tree")).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(0));
+        mvc.perform(put(url).header("Authorization", bearer).contentType("application/json").content("{\"status\":\"active\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/admin/categories/" + root + "/status").header("Authorization", bearer).contentType("application/json").content("{\"status\":\"active\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(put(url).header("Authorization", bearer).contentType("application/json").content("{\"status\":\"active\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/categories/tree")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].children[0].name").value("Sorted child"));
+        mvc.perform(delete("/api/v1/admin/categories/" + child).header("Authorization", bearer)).andExpect(status().isBadRequest());
+    }
+
+    @Test void categoryMoveSortValidationAndDeletionRemainConsistent() throws Exception {
+        long root = category(0, "First root"), other = category(0, "Other root"), child = category(root, "Moving child");
+        mvc.perform(put("/api/v1/admin/categories/" + child).header("Authorization", bearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("name", " Renamed ", "parentId", other, "sort", 9, "status", "active"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("Renamed"));
+        mvc.perform(get("/api/v1/categories/tree")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].children.length()").value(0))
+                .andExpect(jsonPath("$.data[1].children[0].id").value(String.valueOf(child)));
+        mvc.perform(put("/api/v1/admin/categories/" + other).header("Authorization", bearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("name", "Other root", "parentId", 0, "sort", 20, "status", "active"))))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", bearer))
+                .andExpect(jsonPath("$.data[1].id").value(String.valueOf(child))).andExpect(jsonPath("$.data[1].sort").value(9));
+        mvc.perform(post("/api/v1/admin/categories").header("Authorization", bearer).contentType("application/json")
+                .content(categoryBody(999999, "Missing parent", "active"))).andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/admin/categories").header("Authorization", bearer).contentType("application/json")
+                .content("{\"name\":\"Bad sort\",\"parentId\":0,\"sort\":-1,\"status\":\"active\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/admin/categories/" + child + "/status").header("Authorization", bearer).contentType("application/json")
+                .content("{\"status\":\"on_sale\"}")).andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/v1/admin/categories/" + child).header("Authorization", bearer)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/categories/" + child).header("Authorization", bearer)).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", bearer)).andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    @Test void categoryManagementRequiresSeparateReadAndWritePermissions() throws Exception {
+        long id = category(0, "Permissions");
+        mvc.perform(get("/api/v1/admin/categories/management")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", userBearer)).andExpect(status().isForbidden());
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='category:write')");
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", bearer)).andExpect(status().isOk());
+        mvc.perform(put("/api/v1/admin/categories/" + id + "/status").header("Authorization", bearer).contentType("application/json")
+                .content("{\"status\":\"inactive\"}")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/admin/categories/" + id).header("Authorization", bearer)).andExpect(status().isForbidden());
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='category:read')");
+        mvc.perform(get("/api/v1/admin/categories/management").header("Authorization", bearer)).andExpect(status().isForbidden());
     }
 
     @Test void invalidInputReturns400AndInactiveCategoryCannotPublish() throws Exception {
@@ -816,6 +927,94 @@ class AdminCatalogIntegrationTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
     }
 
+    @Test void adminOrderOperationsExposeShipmentNotesAndSafePendingClose() throws Exception {
+        long category = category(0, "Admin order operations");
+        long product = product(category); setProductStatus(product, "on_sale", 200);
+        db.update("INSERT INTO inventory(product_id,quantity,locked_quantity) VALUES(?,2,0)", product);
+        long address = createAddress(userBearer, "13800138000", true);
+        db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,1,1)", product);
+        long pending = createOrder(address, "admin-close");
+        mvc.perform(put("/api/v1/admin/orders/" + pending + "/cancel").header("Authorization", bearer)
+                .contentType("application/json").content("{\"remark\":\"超时未付款\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("cancelled"));
+        mvc.perform(get("/api/v1/admin/orders/" + pending + "/operations").header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].action").value("cancel"));
+        mvc.perform(put("/api/v1/admin/orders/" + pending + "/cancel").header("Authorization", bearer)
+                .contentType("application/json").content("{\"remark\":\"重复关闭\"}"))
+                .andExpect(status().isOk());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM order_admin_operation WHERE order_id=? AND action='cancel'", Integer.class, pending));
+        assertEquals(3, db.queryForObject("SELECT step FROM order_close_release WHERE order_id=?", Integer.class, pending));
+        mvc.perform(post("/api/v1/admin/orders/" + pending + "/notes").header("Authorization", bearer)
+                .contentType("application/json").content("{\"remark\":\"已通知客户\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].action").value("note"));
+
+        db.update("UPDATE cart_item SET is_deleted=0,quantity=1,selected=1 WHERE user_id=100 AND product_id=?", product);
+        long shipment = createOrder(address, "admin-ship");
+        db.update("UPDATE `order` SET status='paid' WHERE id=?", shipment);
+        mvc.perform(put("/api/v1/admin/orders/" + shipment + "/shipment").header("Authorization", bearer)
+                .contentType("application/json").content("{\"carrier\":\"测试物流\",\"trackingNo\":\"ABC-123\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("processing"));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM order_shipment WHERE order_id=?", Integer.class, shipment));
+        mvc.perform(put("/api/v1/admin/orders/" + shipment + "/shipment").header("Authorization", bearer)
+                .contentType("application/json").content("{\"carrier\":\"测试物流\",\"trackingNo\":\"ABC-123\"}"))
+                .andExpect(status().isOk());
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM order_admin_operation WHERE order_id=? AND action='ship'", Integer.class, shipment));
+        assertEquals(1, db.queryForObject("SELECT quantity FROM inventory WHERE product_id=?", Integer.class, product));
+        mvc.perform(get("/api/v1/orders/" + shipment).header("Authorization", userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.logistics.trackingNo").value("ABC-123"));
+        org.mockito.Mockito.when(orderLogistics.find(100L,orders.getById(shipment).getOrderNo()))
+                .thenReturn(new com.gas.ecommerce.modules.order.vo.OrderLogisticsVO("测试物流","ABC-123","旧物流记录"));
+        mvc.perform(put("/api/v1/admin/orders/" + shipment + "/shipment").header("Authorization", bearer)
+                .contentType("application/json").content("{\"carrier\":\"新物流\",\"trackingNo\":\"XYZ-789\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.logistics.carrier").value("新物流"));
+        assertEquals(0, db.queryForObject("SELECT locked_quantity FROM inventory WHERE product_id=?", Integer.class, product));
+        assertEquals(1, db.queryForObject("SELECT quantity FROM inventory WHERE product_id=?", Integer.class, product));
+        mvc.perform(get("/api/v1/orders/" + shipment).header("Authorization",secondUserBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/orders/" + shipment + "/confirm-receipt").header("Authorization",userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("completed"));
+        mvc.perform(put("/api/v1/admin/orders/" + shipment + "/shipment").header("Authorization",bearer)
+                .contentType("application/json").content("{\"carrier\":\"Test\",\"trackingNo\":\"ZZZ-123\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void adminOrderFiltersRejectInvalidRangesAndKeepUserScope() throws Exception {
+        db.update("INSERT INTO `order`(id,order_no,user_id,status,total_amount,pay_amount,create_time) VALUES(701,'FILTER-A',100,'paid',10,10,'2026-10-01 08:00:00'),(702,'FILTER-B',101,'pending_payment',20,20,'2026-10-02 08:00:00')");
+        mvc.perform(get("/api/v1/admin/orders").header("Authorization",bearer).param("userId","100").param("status","paid")
+                .param("startTime","2026-10-01 00:00:00").param("endTime","2026-10-01 23:59:59"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1)).andExpect(jsonPath("$.data.list[0].orderNo").value("FILTER-A"));
+        mvc.perform(get("/api/v1/orders").header("Authorization",userBearer).param("userId","101"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1)).andExpect(jsonPath("$.data.list[0].userId").value("100"));
+        mvc.perform(get("/api/v1/admin/orders").header("Authorization",bearer)
+                .param("startTime","2026-10-02 00:00:00").param("endTime","2026-10-01 00:00:00"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/admin/orders").header("Authorization",bearer).param("userId","-1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test void adminOrderNotesAndFulfillmentArePermissionAndStateProtected() throws Exception {
+        db.update("INSERT INTO `order`(id,order_no,user_id,status,total_amount,pay_amount) VALUES(703,'GUARD',100,'pending_payment',10,10)");
+        mvc.perform(put("/api/v1/admin/orders/703/shipment").header("Authorization",bearer).contentType("application/json")
+                .content("{\"carrier\":\"Test\",\"trackingNo\":\"ABC-123\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/admin/orders/703/notes").header("Authorization",userBearer).contentType("application/json").content("{\"remark\":\"private\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/orders/703/operations").header("Authorization",userBearer)).andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/admin/orders/703/cancel").header("Authorization",bearer).contentType("application/json").content("{\"remark\":\"  \"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/admin/orders/703/notes").header("Authorization",bearer).contentType("application/json").content("{\"remark\":\"private internal note\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/orders/703").header("Authorization",userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.operations").doesNotExist()).andExpect(jsonPath("$.data.remark").doesNotExist());
+        db.update("UPDATE `order` SET status='paid' WHERE id=703");
+        mvc.perform(put("/api/v1/admin/orders/703/cancel").header("Authorization",bearer).contentType("application/json").content("{\"remark\":\"close paid\"}"))
+                .andExpect(status().isBadRequest());
+        assertEquals(0,db.queryForObject("SELECT COUNT(*) FROM order_shipment",Integer.class));
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='order:write')");
+        mvc.perform(get("/api/v1/admin/orders/703/operations").header("Authorization",bearer)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/orders/703/notes").header("Authorization",bearer).contentType("application/json").content("{\"remark\":\"read only\"}"))
+                .andExpect(status().isForbidden());
+    }
+
     @Test void orderExpiryAndInputValidation() throws Exception {
         long category = category(0, "Expiry category");
         long product = product(category);
@@ -835,6 +1034,121 @@ class AdminCatalogIntegrationTests {
         assertEquals(0, db.queryForObject("SELECT locked_quantity FROM inventory WHERE product_id=?", Integer.class, product));
     }
 
+    private long applyAftersale(long orderId,String key) throws Exception {
+        var result=mvc.perform(post("/api/v1/aftersales").header("Authorization",userBearer).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("orderId",orderId,"reason","申请退款","requestId",key))))
+                .andExpect(status().isOk()).andReturn();
+        return json.readTree(result.getResponse().getContentAsString()).at("/data/id").asLong();
+    }
+    @Test void aftersaleAuditsAreScopedAndRefundReleasesOnlyUnfulfilledReservationsOnce() throws Exception {
+        long order=createPaidOrder(userBearer,100,"audit-stock","audit-order","success",200);
+        long id=applyAftersale(order,"audit-apply");
+        mvc.perform(get("/api/v1/aftersales/"+id+"/operations").header("Authorization",secondUserBearer)).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/review").header("Authorization",bearer).contentType("application/json")
+                .content("{\"status\":\"approved\",\"remark\":\"核实通过\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.data.reviewedBy").value("7"));
+        for(int i=0;i<2;i++) mvc.perform(put("/api/v1/admin/aftersales/"+id+"/complete").header("Authorization",bearer).contentType("application/json")
+                .content("{\"refundReference\":\"  REF-AUDIT  \",\"remark\":\"渠道确认\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.refundReference").value("REF-AUDIT"))
+                .andExpect(jsonPath("$.data.completionRemark").value("渠道确认")).andExpect(jsonPath("$.data.completedTime").isNotEmpty());
+        mvc.perform(get("/api/v1/admin/aftersales/"+id+"/operations").header("Authorization",bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].action").value("apply")).andExpect(jsonPath("$.data[1].action").value("approve"))
+                .andExpect(jsonPath("$.data[2].action").value("complete")).andExpect(jsonPath("$.data[2].operatorId").value("7"));
+        mvc.perform(get("/api/v1/aftersales/"+id+"/operations").header("Authorization",userBearer)).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(3));
+        assertEquals(20,db.queryForObject("SELECT SUM(quantity) FROM inventory",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM inventory_log WHERE change_type='order_release'",Integer.class));
+        assertEquals("released",db.queryForObject("SELECT status FROM order_stock_reservation WHERE order_id=?",String.class,order));
+    }
+    @Test void aftersaleRequestKeyCannotBeReusedWithDifferentPayload() throws Exception {
+        long order=createPaidOrder(userBearer,100,"key-stock","key-order","success",100);
+        long id=applyAftersale(order,"same-key");
+        for(var input:java.util.List.of(Map.of("orderId",order,"reason","不同原因","requestId","same-key"),Map.of("orderId",999999L,"reason","申请退款","requestId","same-key"))) {
+            mvc.perform(post("/api/v1/aftersales").header("Authorization",userBearer).contentType("application/json").content(json.writeValueAsString(input))).andExpect(status().isBadRequest());
+        }
+        assertEquals(id,applyAftersale(order,"same-key"));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+    }
+    @Test void aftersaleFiltersPermissionsAndReviewRetriesAreEnforced() throws Exception {
+        long order=createPaidOrder(userBearer,100,"filter-stock","filter-order","success",100);
+        long id=applyAftersale(order,"filter-apply");
+        String url="/api/v1/admin/aftersales";
+        for(int i=0;i<2;i++) mvc.perform(put(url+"/"+id+"/review").header("Authorization",bearer).contentType("application/json").content("{\"status\":\"rejected\",\"remark\":\"不符合退款条件\"}")).andExpect(status().isOk());
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+        mvc.perform(get(url).header("Authorization",bearer).param("orderNo","TEST1").param("status","rejected")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        mvc.perform(get(url).header("Authorization",bearer).param("orderNo","MISSING")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/v1/aftersales").header("Authorization",secondUserBearer).param("orderNo","TEST1")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        for(var params:java.util.List.of(Map.of("status","invalid"),Map.of("size","101"),Map.of("sort","id;DROP TABLE aftersale"))) {
+            var request=get(url).header("Authorization",bearer);params.forEach(request::param);mvc.perform(request).andExpect(status().isBadRequest());
+        }
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='aftersale:write')");
+        mvc.perform(get(url+"/"+id+"/operations").header("Authorization",bearer)).andExpect(status().isOk());
+        mvc.perform(put(url+"/"+id+"/review").header("Authorization",bearer).contentType("application/json").content("{\"status\":\"approved\",\"remark\":\"attempt\"}")).andExpect(status().isForbidden());
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='aftersale:read')");
+        mvc.perform(get(url+"/"+id+"/operations").header("Authorization",bearer)).andExpect(status().isForbidden());
+    }
+    @Test void aftersaleBlocksFulfillmentAndRejectedApplicationsAllowItAgain() throws Exception {
+        long order=createPaidOrder(userBearer,100,"ship-stock","ship-order","success",100);
+        long id=applyAftersale(order,"ship-apply");
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->orders.process(order));
+        mvc.perform(put("/api/v1/admin/orders/"+order+"/shipment").header("Authorization",bearer).contentType("application/json").content("{\"carrier\":\"顺丰\",\"trackingNo\":\"SF123456\"}")).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/review").header("Authorization",bearer).contentType("application/json").content("{\"status\":\"rejected\",\"remark\":\"核实后拒绝\"}")).andExpect(status().isOk());
+        assertEquals("processing",orders.process(order).status());
+    }
+    @Test void aftersaleRefundForFulfilledGoodsDoesNotInventPhysicalReturnStock() throws Exception {
+        long order=createPaidOrder(userBearer,100,"fulfilled-stock","fulfilled-order","success",100);
+        orders.process(order);
+        long id=applyAftersale(order,"fulfilled-apply");
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/review").header("Authorization",bearer).contentType("application/json").content("{\"status\":\"approved\",\"remark\":\"通过\"}")).andExpect(status().isOk());
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/complete").header("Authorization",bearer).contentType("application/json").content("{\"refundReference\":\"REF-FULFILLED\"}")).andExpect(status().isOk());
+        assertEquals(19,db.queryForObject("SELECT SUM(quantity) FROM inventory",Integer.class));
+        assertEquals(0,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals("consumed",db.queryForObject("SELECT status FROM order_stock_reservation WHERE order_id=?",String.class,order));
+    }
+    @Test void aftersaleRefundFailureRollsBackPaymentOrderStockAndAudit() throws Exception {
+        long order=createPaidOrder(userBearer,100,"rollback-stock","rollback-order","success",100);
+        long id=applyAftersale(order,"rollback-apply");
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/review").header("Authorization",bearer).contentType("application/json").content("{\"status\":\"approved\",\"remark\":\"通过\"}")).andExpect(status().isOk());
+        db.update("UPDATE payment SET amount=99 WHERE order_id=?",order);
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/complete").header("Authorization",bearer).contentType("application/json").content("{\"refundReference\":\"REF-BAD\"}")).andExpect(status().isBadRequest());
+        assertEquals("approved",db.queryForObject("SELECT status FROM aftersale WHERE id=?",String.class,id));
+        assertEquals("paid",db.queryForObject("SELECT status FROM `order` WHERE id=?",String.class,order));
+        assertEquals(1,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+        db.update("UPDATE payment SET amount=100 WHERE order_id=?",order);
+        db.execute("ALTER TABLE aftersale_operation ADD CONSTRAINT test_no_completion CHECK (action<>'complete')");
+        mvc.perform(put("/api/v1/admin/aftersales/"+id+"/complete").header("Authorization",bearer).contentType("application/json").content("{\"refundReference\":\"REF-ROLLBACK\"}")).andExpect(status().isInternalServerError());
+        assertEquals("approved",db.queryForObject("SELECT status FROM aftersale WHERE id=?",String.class,id));
+        assertEquals("success",db.queryForObject("SELECT status FROM payment WHERE order_id=?",String.class,order));
+        assertEquals("paid",db.queryForObject("SELECT status FROM `order` WHERE id=?",String.class,order));
+        assertEquals(1,db.queryForObject("SELECT SUM(locked_quantity) FROM inventory",Integer.class));
+        assertEquals("reserved",db.queryForObject("SELECT status FROM order_stock_reservation WHERE order_id=?",String.class,order));
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+    }
+    @Test void aftersaleCancellationAuditDoesNotDuplicateAndApplicationCanBeResubmitted() throws Exception {
+        long order=createPaidOrder(userBearer,100,"cancel-stock","cancel-order","success",100);
+        long id=applyAftersale(order,"cancel-apply");
+        for(int i=0;i<2;i++) mvc.perform(put("/api/v1/aftersales/"+id+"/cancel").header("Authorization",userBearer)).andExpect(status().isOk());
+        assertEquals(2,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+        assertEquals("cancel",db.queryForObject("SELECT action FROM aftersale_operation WHERE aftersale_id=? ORDER BY id DESC LIMIT 1",String.class,id));
+        assertNotEquals(id,applyAftersale(order,"resubmit-apply"));
+    }
+    @Autowired com.gas.ecommerce.modules.aftersale.service.AftersaleService aftersaleService;
+    @Test void aftersaleConcurrentRefundRetriesOnlyReleaseAndAuditOnce() throws Exception {
+        long order=createPaidOrder(userBearer,100,"race-refund-stock","race-refund-order","success",100);
+        long id=applyAftersale(order,"race-refund-apply");
+        aftersaleService.review(id,7L,new com.gas.ecommerce.modules.aftersale.dto.AftersaleReviewRequest("approved","通过"));
+        var request=new com.gas.ecommerce.modules.aftersale.dto.AftersaleCompleteRequest("REF-RACE","渠道已退款");
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var start=new java.util.concurrent.CountDownLatch(1);
+            var a=pool.submit(()->{start.await();return aftersaleService.complete(id,7L,request);});
+            var b=pool.submit(()->{start.await();return aftersaleService.complete(id,7L,request);});
+            start.countDown();
+            assertEquals(a.get(15,java.util.concurrent.TimeUnit.SECONDS).id(),b.get(15,java.util.concurrent.TimeUnit.SECONDS).id());
+        }
+        assertEquals(3,db.queryForObject("SELECT COUNT(*) FROM aftersale_operation",Integer.class));
+        assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM inventory_log WHERE change_type='order_release'",Integer.class));
+    }
     @Test void aftersaleApplicationReviewAndRefundCompletionAreScopedAndIdempotent() throws Exception {
         long orderId = createPaidOrder(userBearer, 100, "as-order-1", "after-1", "success", 200);
         String request = json.writeValueAsString(Map.of("orderId", orderId, "reason", "商品存在质量问题", "requestId", "as-request-1"));
@@ -991,6 +1305,42 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get("/api/v1/user-coupons")).andExpect(status().isUnauthorized());
         db.update("UPDATE `user` SET status='inactive' WHERE id=100");
         mvc.perform(post("/api/v1/coupons/"+template+"/claim").header("Authorization",userBearer)).andExpect(status().isBadRequest());
+    }
+    @Test void couponCenterHidesOwnedCouponsButKeepsThemAvailableToOtherUsers() throws Exception {
+        long template=coupon(10);
+        claimCoupon(template);
+        mvc.perform(get("/api/v1/coupons").header("Authorization",userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/v1/coupons").header("Authorization",secondUserBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer).param("status","unused"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        assertEquals(claimCoupon(template),claimCoupon(template));
+    }
+    @Test void couponAdminAcceptsFrontendDateFormatAndNormalizesName() throws Exception {
+        String body=json.writeValueAsString(Map.of("name","  页面优惠券  ","amount",10,"minimumAmount",100,
+                "startTime","2026-10-28 08:30:00","endTime","2026-11-28 08:30:00","quantity",20,"status","active"));
+        mvc.perform(post("/api/v1/admin/coupons").header("Authorization",bearer).contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("页面优惠券"))
+                .andExpect(jsonPath("$.data.startTime").value("2026-10-28 08:30:00"))
+                .andExpect(jsonPath("$.data.remainingQuantity").value(20));
+    }
+    @Test void checkoutCouponListFiltersThresholdFaceValueAndStartTime() throws Exception {
+        long owned=claimCoupon(coupon(2));
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer)
+                .param("status","unused").param("orderAmount","49.99"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer)
+                .param("status","unused").param("orderAmount","50.00"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        db.update("UPDATE user_coupon SET amount=50 WHERE id=?",owned);
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer).param("orderAmount","50.00"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        db.update("UPDATE user_coupon SET amount=20,start_time=? WHERE id=?",java.time.LocalDateTime.now().plusHours(1),owned);
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer).param("orderAmount","100.00"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
+        mvc.perform(get("/api/v1/user-coupons").header("Authorization",userBearer).param("orderAmount","-1"))
+                .andExpect(status().isBadRequest());
     }
     @Test void couponClaimedTermsAreFrozenAndDeletionPreservesSnapshots() throws Exception {
         long template=coupon(2), owned=claimCoupon(template);
@@ -1314,6 +1664,22 @@ class AdminCatalogIntegrationTests {
     }
 
     @Autowired com.gas.ecommerce.modules.inventory.service.InventoryService inventoryService;
+    @Test void inventorySelectorsUseInventoryPermissionAndExcludeUnavailableReferences() throws Exception {
+        long p=product(category(0,"Inventory selectors"));
+        db.update("INSERT INTO store(id,name,status,is_deleted) VALUES(700,'Active store','active',0),(701,'Disabled store','inactive',0),(702,'Deleted store','active',1)");
+        long deleted=product(category(0,"Deleted selector"));
+        db.update("UPDATE product SET is_deleted=1 WHERE id=?",deleted);
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key IN ('product:read','store:read'))");
+        mvc.perform(get("/api/v1/admin/inventory/options").header("Authorization",bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.products.length()").value(1))
+                .andExpect(jsonPath("$.data.products[0].id").value(Long.toString(p)))
+                .andExpect(jsonPath("$.data.stores.length()").value(1))
+                .andExpect(jsonPath("$.data.stores[0].id").value("700"));
+        mvc.perform(get("/api/v1/admin/inventory/options").header("Authorization",userBearer)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/inventory/options")).andExpect(status().isUnauthorized());
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='inventory:read')");
+        mvc.perform(get("/api/v1/admin/inventory/options").header("Authorization",bearer)).andExpect(status().isForbidden());
+    }
     private long inventoryStock(int quantity) throws Exception {
         long p=product(category(0,"Stock"));
         return inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,null,quantity,"stock-create","opening")).inventoryId();

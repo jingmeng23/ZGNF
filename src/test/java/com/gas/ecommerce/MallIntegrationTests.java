@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties="app.mall.history-capacity=2")
 @ActiveProfiles("test") @AutoConfigureMockMvc
 @Sql(statements="DROP ALL OBJECTS")
-@Sql(scripts={"/db/migration/V1.0__init_schema.sql","/db/migration/V1.12__product_details.sql","/db/migration/V1.13__mall_catalog.sql","/db/migration/V1.14__mall_cache_invalidation_retry.sql"})
+@Sql(scripts={"/db/migration/V1.0__init_schema.sql","/db/migration/V1.12__product_details.sql","/db/migration/V1.13__mall_catalog.sql","/db/migration/V1.14__mall_cache_invalidation_retry.sql","/db/migration/V1.22__available_sku_display_price.sql"})
 class MallIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate db;
@@ -69,6 +69,31 @@ class MallIntegrationTests {
         mvc.perform(get("/api/v1/mall/products").param("sort","sales").param("size","1"))
                 .andExpect(jsonPath("$.data.list[0].name").value("报警器")).andExpect(jsonPath("$.data.total").value(4));
         mvc.perform(get("/api/v1/mall/products").param("minPrice","100").param("maxPrice","10")).andExpect(status().isBadRequest());
+    }
+    @Test void displayPriceTracksStockAndFallsBackWhenSoldOutOrDisabled() throws Exception {
+        mvc.perform(get("/api/v1/mall/products/1"))
+                .andExpect(jsonPath("$.data.product.price").value(75));
+        db.update("UPDATE sku_inventory SET quantity=3 WHERE sku_id=12");
+        mvc.perform(get("/api/v1/mall/products/1"))
+                .andExpect(jsonPath("$.data.product.price").value(66));
+        db.update("UPDATE sku_inventory SET quantity=0 WHERE sku_id IN (11,12)");
+        mvc.perform(get("/api/v1/mall/products/1"))
+                .andExpect(jsonPath("$.data.product.price").value(66))
+                .andExpect(jsonPath("$.data.product.status").value("sold_out"));
+        mvc.perform(get("/api/v1/mall/products").param("inStock","true").param("minPrice","60").param("maxPrice","80"))
+                .andExpect(jsonPath("$.data.total").value(0));
+        db.update("UPDATE product_sku SET status='inactive' WHERE product_id=1");
+        mvc.perform(get("/api/v1/mall/products/1"))
+                .andExpect(jsonPath("$.data.product.price").value(100));
+    }
+    @Test void displayPriceUsesLiveQuotesAndIgnoresExpiredQuotes() throws Exception {
+        db.update("UPDATE marketing_sku_quote SET price=72 WHERE sku_id=11");
+        mvc.perform(get("/api/v1/mall/products").param("minPrice","72").param("maxPrice","72"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.list[0].price").value(72));
+        db.update("UPDATE marketing_sku_quote SET ends_at=DATEADD('DAY',-1,CURRENT_TIMESTAMP) WHERE sku_id=11");
+        mvc.perform(get("/api/v1/mall/products/1"))
+                .andExpect(jsonPath("$.data.product.price").value(100));
     }
     @Test void detailContainsContentAndExplicitStates() throws Exception {
         mvc.perform(get("/api/v1/mall/products/1")).andExpect(jsonPath("$.data.mainImages[0]").value("/main.jpg"))
@@ -120,6 +145,34 @@ class MallIntegrationTests {
                 .andExpect(jsonPath("$.data.total").value(2)).andExpect(jsonPath("$.data.list[0].productId").value("3"))
                 .andExpect(jsonPath("$.data.list[1].productId").value("1"));
         mvc.perform(get("/api/v1/mall/me/history").header("Authorization",auth(2))).andExpect(jsonPath("$.data.total").value(0));
+    }
+    @Test void historyPreservesCacheOrderAndPaginatesWithoutExposingOtherUsers() throws Exception {
+        personal.visit(1L,1L); personal.visit(1L,3L); personal.visit(2L,2L);
+        var zset = redis.opsForZSet();
+        org.mockito.Mockito.when(zset.reverseRange("mall:history:user:1",0,1))
+                .thenReturn(new java.util.LinkedHashSet<>(java.util.List.of("1","3","2")));
+        // A cache hit must preserve Redis's order, independent of SQL row order.
+        mvc.perform(get("/api/v1/mall/me/history").param("size","2").header("Authorization",auth(1)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.list.length()").value(2))
+                .andExpect(jsonPath("$.data.list[0].productId").value("1"))
+                .andExpect(jsonPath("$.data.list[1].productId").value("3"));
+        mvc.perform(get("/api/v1/mall/me/history").param("page","2").param("size","1").header("Authorization",auth(1)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.list[0].productId").value("1"));
+        mvc.perform(get("/api/v1/mall/me/history").param("page","3").param("size","1").header("Authorization",auth(1)))
+                .andExpect(jsonPath("$.data.list.length()").value(0));
+    }
+    @Test void historyCacheUpdatesAndRebuildUseTheSameDatabaseTimestampScale() throws Exception {
+        personal.visit(1L,1L);
+        var timestamp = db.queryForObject("SELECT viewed_at FROM mall_history WHERE user_id=1 AND product_id=1", java.sql.Timestamp.class);
+        var instant = timestamp.toInstant();
+        double score = instant.getEpochSecond() * 1_000_000.0 + instant.getNano() / 1_000;
+        var zset = redis.opsForZSet();
+        org.mockito.Mockito.verify(zset).add("mall:history:user:1","1",score);
+        org.mockito.Mockito.clearInvocations(zset);
+        mvc.perform(get("/api/v1/mall/me/history").header("Authorization",auth(1)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        org.mockito.Mockito.verify(zset).add("mall:history:user:1","1",score);
     }
     @Test void historyUsesDatabaseWhenRedisIsUnavailable() throws Exception {
         org.mockito.Mockito.when(redis.opsForZSet()).thenThrow(new RedisConnectionFailureException("redis down"));

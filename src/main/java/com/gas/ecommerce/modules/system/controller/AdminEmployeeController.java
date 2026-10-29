@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.*;
 public class AdminEmployeeController {
     private final OrganizationManagementService service;
     public AdminEmployeeController(OrganizationManagementService service) { this.service=service; }
+    @GetMapping("/options") @RequiresPermission("employee:read")
+    public Result<?> options() { return Result.success(service.employeeOptions()); }
     @GetMapping @RequiresPermission("employee:read")
     public Result<?> list(@Valid @ModelAttribute ManagementQuery q) { return Result.success(service.employees(q)); }
     @GetMapping("/{id}") @RequiresPermission("employee:read")
@@ -19,6 +21,8 @@ public class AdminEmployeeController {
     public Result<?> create(@Valid @RequestBody EmployeeCreateRequest r) { return Result.success(service.createEmployee(r)); }
     @PutMapping("/{id}") @RequiresPermission("employee:write")
     public Result<?> update(@PathVariable Long id,@Valid @RequestBody EmployeeRequest r) { return Result.success(service.updateEmployee(id,r)); }
+    @PutMapping("/{id}/status") @RequiresPermission("employee:write")
+    public Result<?> status(@PathVariable Long id,@Valid @RequestBody EmployeeStatusRequest r) { return Result.success(service.changeEmployeeStatus(id,r)); }
     @PutMapping("/{id}/password") @RequiresPermission("role:write")
     public Result<Void> password(@PathVariable Long id,@Valid @RequestBody PasswordRequest r) { service.resetPassword(id,r); return Result.success(); }
     @PutMapping("/{id}/roles") @RequiresPermission("role:write")

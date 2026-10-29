@@ -28,7 +28,7 @@ import static org.mockito.Mockito.*;
         "/db/migration/V1.10__business_statistics.sql","/db/migration/V1.11__cart_price_snapshot.sql",
         "/db/migration/V1.12__product_details.sql","/db/migration/V1.13__mall_catalog.sql",
         "/db/migration/V1.14__mall_cache_invalidation_retry.sql","/db/migration/V1.15__order_checkout_outbox.sql",
-        "/db/migration/V1.16__checkout_orchestration.sql","/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql"})
+        "/db/migration/V1.16__checkout_orchestration.sql","/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql"})
 class PaymentCallbackIntegrationTests {
     @Autowired JdbcTemplate db;
     @Autowired PaymentService payments;

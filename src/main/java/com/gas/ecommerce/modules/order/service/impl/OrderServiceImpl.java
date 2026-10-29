@@ -156,8 +156,19 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override @Transactional
+    public OrderVO cancelAdmin(Long id) {
+        Order order = requireOrder(id, true);
+        if ("cancelled".equals(order.getStatus())) return view(order);
+        if (!"pending_payment".equals(order.getStatus())) throw new BusinessException("仅待支付订单可关闭，已付款订单请走售后退款流程");
+        cancelOrder(order);
+        return view(order);
+    }
+
+    @Override @Transactional
     public OrderVO process(Long id) {
         Order order = requireOrder(id, true);
+        if (db.queryForObject("SELECT COUNT(*) FROM aftersale WHERE order_id=? AND status IN ('pending','approved') AND is_deleted=0",Integer.class,id)>0)
+            throw new BusinessException("订单存在处理中售后，请先处理售后再履约");
         if ("processing".equals(order.getStatus())) return view(order);
         if (!"paid".equals(order.getStatus())) throw new BusinessException("仅已支付订单可开始处理");
         stock.consume(order);
@@ -185,10 +196,15 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     private PageResult<OrderVO> pageOrders(Long userId, OrderQueryRequest query) {
+        if (query.getStartTime()!=null && query.getEndTime()!=null && query.getStartTime().isAfter(query.getEndTime()))
+            throw new BusinessException("开始时间不能晚于结束时间");
         if(userId!=null && (long)(query.getPage()-1)*query.getSize()>10000) throw new BusinessException("Deep pagination requires /orders/scroll");
         var wrapper = Wrappers.<Order>lambdaQuery().eq(userId != null, Order::getUserId, userId)
+                .eq(userId == null && query.getUserId()!=null, Order::getUserId, query.getUserId())
                 .eq(query.getStatus() != null, Order::getStatus, query.getStatus())
                 .eq(query.getOrderNo() != null && !query.getOrderNo().isBlank(), Order::getOrderNo, query.getOrderNo())
+                .ge(query.getStartTime()!=null, Order::getCreateTime, query.getStartTime())
+                .le(query.getEndTime()!=null, Order::getCreateTime, query.getEndTime())
                 .orderByDesc(Order::getCreateTime).orderByDesc(Order::getId);
         Page<Order> page = page(new Page<>(query.getPage(), query.getSize()), wrapper);
         List<Order> orders = page.getRecords();

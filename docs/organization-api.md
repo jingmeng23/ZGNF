@@ -11,8 +11,10 @@
 | PUT | `/stores/{id}` | `store:write` | 更新完整资料及状态 |
 | DELETE | `/stores/{id}` | `store:write` | 软删除门店 |
 | GET | `/employees`、`/employees/{id}` | `employee:read` | 员工分页、详情 |
+| GET | `/employees/options` | `employee:read` | 组织/角色名称选项及操作权限 |
 | POST | `/employees` | `employee:write` | 创建员工，初始无角色 |
 | PUT | `/employees/{id}` | `employee:write` | 更新完整资料及状态 |
+| PUT | `/employees/{id}/status` | `employee:write` | 仅修改状态，保留管理员及工单保护 |
 | DELETE | `/employees/{id}` | `employee:write` | 软删除员工并清理角色关联 |
 | PUT | `/employees/{id}/password` | `role:write` | 重置密码 |
 | PUT | `/employees/{id}/roles` | `role:write` | 全量替换员工角色 |

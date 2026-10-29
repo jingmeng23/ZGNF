@@ -29,6 +29,10 @@ public class AdminAftersaleController {
     }
     @PutMapping("/{id}/complete") @RequiresPermission("aftersale:write")
     public Result<AftersaleVO> complete(@PathVariable Long id, @Valid @RequestBody AftersaleCompleteRequest request) {
-        return Result.success(aftersales.complete(id, request));
+        return Result.success(aftersales.complete(id, com.gas.ecommerce.common.security.SecurityUtils.currentUserId(), request));
+    }
+    @GetMapping("/{id}/operations") @RequiresPermission("aftersale:read")
+    public Result<java.util.List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO>> operations(@PathVariable Long id) {
+        return Result.success(aftersales.operationsAdmin(id));
     }
 }

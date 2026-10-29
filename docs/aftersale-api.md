@@ -10,6 +10,7 @@
 | GET | `/aftersales` | 分页查询当前用户的申请，可按状态筛选 |
 | GET | `/aftersales/{id}` | 查看本人申请详情 |
 | PUT | `/aftersales/{id}/cancel` | 撤销本人仍处于 `pending` 的申请 |
+| GET | `/aftersales/{id}/operations` | 查看本人申请的处理记录 |
 
 创建申请示例：
 
@@ -31,6 +32,7 @@
 | GET | `/admin/aftersales/{id}` | `aftersale:read` | 查看售后详情 |
 | PUT | `/admin/aftersales/{id}/review` | `aftersale:write` | 审核申请 |
 | PUT | `/admin/aftersales/{id}/complete` | `aftersale:write` | 登记退款渠道已完成 |
+| GET | `/admin/aftersales/{id}/operations` | `aftersale:read` | 查看操作人、状态变化、备注和处理时间 |
 
 审核示例：
 
@@ -60,3 +62,15 @@
 当前服务不直接调用第三方支付退款接口。管理员应先在支付渠道完成退款，再调用完成接口登记渠道退款流水号。登记成功后售后单、订单和支付记录会同步标记为退款完成；使用同一流水号重复登记具有幂等性。
 
 数据库首次部署会由 Flyway 执行 `V1.3__aftersale_workflow.sql`，为售后流程增加幂等、审核、退款字段及管理员权限。
+
+## 管理页面与增强规则
+
+管理端入口 `/#/admin/aftersales`，用户端入口 `/#/aftersales`。详见 [售后管理与前后端对接](aftersale-management.md)。
+
+列表支持 `orderNo`、`aftersaleNo`、`status` 精确筛选及 page/size 分页；排序字段为 createTime/updateTime/id/amount。
+详情增加 reviewedBy、completionRemark、completedTime。操作记录由 `V1.23__aftersale_management.sql` 创建的表保存，历史记录不推算补造。
+用户撤销为兼容旧数据仍使用 rejected 状态，通过审核人和撤销备注区分。
+
+申请重试必须保持同一 requestId 的订单及原因相同；不同参数复用会拒绝。同一审核人相同决定和意见重试不重复留痕。
+退款流水号会去除首尾空白后保存和比较，同流水号重复登记不会重复释放库存。
+未履约订单退款会释放预占库存，已履约退款不自动增加实物库存。存在 pending/approved 售后时禁止继续履约和发货。

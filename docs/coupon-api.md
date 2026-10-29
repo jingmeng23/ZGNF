@@ -32,7 +32,7 @@ amount 必须大于零，minimumAmount 非负，金额最多两位小数；quant
 | POST | `/api/v1/coupons/{id}/claim` | 领取，空请求体；每人每种券限领一张，重试返回原券 |
 | GET | `/api/v1/user-coupons` | 我的券，分页；status 为 unused/locked/used/expired，可传 orderAmount 筛选当前可用券 |
 
-领券中心可能包含当前用户已领模板；每人限领规则由领取接口保证。quantity 为零、尚未开始、已到期、停用或删除的模板不可新领取。库存竞争和重复领取使用数据库事务及行锁保护。
+领券中心不展示当前用户已领取的模板；每人限领规则仍由领取接口保证。quantity 为零、尚未开始、已到期、停用或删除的模板不可新领取。库存竞争和重复领取使用数据库事务及行锁保护。
 
 我的券返回 id、couponId、name、amount、minimumAmount、startTime、expireTime、status、usedOrderId、createTime。`id` 是用户券 ID，`couponId` 是模板 ID。orderAmount 仅用于展示筛选，结算以服务端读取的购物车价格为准。
 
@@ -62,3 +62,12 @@ GROUP BY user_id,coupon_id HAVING COUNT(*)>1;
 重复记录须按实际核销历史处理后再迁移，迁移不会自动删除用户权益。孤立历史券无法补全快照时会拒绝用于新订单。
 
 自动化集成测试覆盖领取限额、并发领取、权限、有效期和门槛、快照、订单回滚、支付核销、取消返还及实付退款。测试数据库使用 H2 的 MySQL 兼容模式；上线前需在目标 MySQL 环境执行迁移和并发验收。
+
+## 前端入口与本地联调
+
+- 用户端 `/#/coupons`：领券中心、关键词搜索、领取、我的优惠券、状态筛选和分页；个人中心提供入口。
+- 管理端 `/#/admin/coupons`：查询、新增、编辑、删除；已领券条款禁止修改。
+- 购物车 `/#/cart`：根据服务端返回的已选商品金额传递 `orderAmount` 筛选可用券，加载全部分页；选中金额变化后刷新，失效选择自动清空。下单先调用 `/orders/preview`，展示服务端优惠及应付金额，再携带用户券 ID 和预览凭据创建订单。
+- 前端统一使用 `frontend/src/api/coupons.ts`，经公共 HTTP 客户端附加登录令牌。日期控件值在 API 层转换为 `yyyy-MM-dd HH:mm:ss`；回填控件时转回 `T` 分隔。
+- 在根目录运行 `mvn spring-boot:run`（需要配置好 MySQL、Redis、RabbitMQ）；在 `frontend` 目录运行 `npm install`、`npm run dev`。Vite 默认将 `/api` 转发到 `http://localhost:8080`，可通过 `VITE_API_PROXY_TARGET` 修改。
+- 本地联调须使用真实登录会话并关闭演示模式；用户端和管理端分别使用有对应权限的账号。生产环境须配置 `/api` 反向代理或设置 `VITE_API_BASE_URL`。

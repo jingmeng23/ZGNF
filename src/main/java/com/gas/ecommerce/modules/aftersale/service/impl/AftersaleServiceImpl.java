@@ -27,9 +27,11 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
     private final OrderMapper orders;
     private final PaymentMapper payments;
     private final org.springframework.jdbc.core.JdbcTemplate db;
+    private final com.gas.ecommerce.modules.order.service.OrderInventoryService stock;
 
-    public AftersaleServiceImpl(UserMapper users, OrderMapper orders, PaymentMapper payments,org.springframework.jdbc.core.JdbcTemplate db) {
-        this.users = users; this.orders = orders; this.payments = payments; this.db=db;
+    public AftersaleServiceImpl(UserMapper users, OrderMapper orders, PaymentMapper payments,org.springframework.jdbc.core.JdbcTemplate db,
+            com.gas.ecommerce.modules.order.service.OrderInventoryService stock) {
+        this.users = users; this.orders = orders; this.payments = payments; this.db=db; this.stock=stock;
     }
 
     @Override @Transactional
@@ -38,7 +40,11 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         if (user == null || !"active".equals(user.getStatus())) throw new BusinessException("用户不存在或已停用");
         Aftersale duplicate = getOne(Wrappers.<Aftersale>lambdaQuery().eq(Aftersale::getUserId, userId)
                 .eq(Aftersale::getRequestId, request.requestId()));
-        if (duplicate != null) return view(duplicate);
+        if (duplicate != null) {
+            if (!request.orderId().equals(duplicate.getOrderId()) || !request.reason().trim().equals(duplicate.getReason()))
+                throw new BusinessException("请求编号已用于不同的售后申请");
+            return view(duplicate);
+        }
 
         Order order = orders.lockById(request.orderId());
         if (order == null || !userId.equals(order.getUserId())) throw new BusinessException("订单不存在");
@@ -58,6 +64,7 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         aftersale.setReason(request.reason().trim()); aftersale.setAmount(order.getPayAmount());
         aftersale.setRequestId(request.requestId()); aftersale.setStatus("pending"); aftersale.setIsDeleted(0);
         save(aftersale);
+        record(aftersale, userId, "user", "apply", null, aftersale.getReason());
         return view(aftersale);
     }
 
@@ -82,45 +89,61 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         if ("rejected".equals(row.getStatus())) return view(row);
         if (!"pending".equals(row.getStatus())) throw new BusinessException("仅待审核售后可撤销");
         row.setStatus("rejected"); row.setReviewRemark("用户撤销申请"); updateById(row);
+        record(row, userId, "user", "cancel", "pending", "用户撤销申请");
         return view(row);
     }
 
     @Override @Transactional
     public AftersaleVO review(Long id, Long adminId, AftersaleReviewRequest request) {
         Aftersale row = require(id, true);
+        if (request.status().equals(row.getStatus()) && adminId.equals(row.getReviewedBy())
+                && request.remark().trim().equals(row.getReviewRemark())) return view(row);
         if (!"pending".equals(row.getStatus())) throw new BusinessException("仅待审核售后可审核");
         row.setStatus(request.status()); row.setReviewRemark(request.remark().trim());
         row.setReviewedBy(adminId); updateById(row);
+        record(row, adminId, "admin", "approved".equals(request.status()) ? "approve" : "reject", "pending", row.getReviewRemark());
         return view(row);
     }
 
     @Override @Transactional
-    public AftersaleVO complete(Long id, AftersaleCompleteRequest request) {
+    public AftersaleVO complete(Long id, Long adminId, AftersaleCompleteRequest request) {
         Aftersale row = require(id, true);
         if ("completed".equals(row.getStatus())) {
-            if (request.refundReference().equals(row.getRefundReference())) return view(row);
+            if (request.refundReference().trim().equals(row.getRefundReference())) return view(row);
             throw new BusinessException("售后已完成，不可修改退款流水号");
         }
         if (!"approved".equals(row.getStatus())) throw new BusinessException("仅审核通过的售后可完成退款");
         Order order = orders.lockById(row.getOrderId());
         if (order == null || !row.getUserId().equals(order.getUserId())) throw new BusinessException("关联订单不存在");
         Payment payment = payments.lockSuccessfulForOrder(order.getId());
-        if (payment == null || payment.getAmount().compareTo(row.getAmount()) != 0)
+        if (payment == null || payment.getAmount() == null || payment.getAmount().compareTo(row.getAmount()) != 0
+                || order.getPayAmount() == null || order.getPayAmount().compareTo(row.getAmount()) != 0)
             throw new BusinessException("待退款支付记录不存在或金额不一致");
+        // Unfulfilled orders still hold reservations; fulfilled goods require a separate physical return.
+        if ("paid".equals(order.getStatus())) stock.release(order);
         payment.setStatus("refunded"); payments.updateById(payment);
         com.gas.ecommerce.modules.order.service.OrderStateMachine.persistTransition(order, "refunded",db);
         row.setStatus("completed"); row.setRefundReference(request.refundReference().trim());
         row.setCompletionRemark(request.remark()); row.setCompletedTime(LocalDateTime.now());
         updateById(row);
+        record(row, adminId, "admin", "complete", "approved", request.remark() == null ? "登记渠道退款完成" : request.remark().trim());
         return view(row);
     }
 
     private PageResult<AftersaleVO> pageRows(Long userId, AftersaleQueryRequest query) {
+        Long orderId = null;
+        if (query.getOrderNo() != null && !query.getOrderNo().isBlank()) {
+            var matches = orders.selectList(Wrappers.<Order>lambdaQuery().eq(Order::getOrderNo,query.getOrderNo().trim()));
+            if (matches.isEmpty()) return new PageResult<>(List.of(),0,query.getPage(),query.getSize(),0);
+            orderId = matches.getFirst().getId();
+        }
         var wrapper = Wrappers.<Aftersale>lambdaQuery().eq(userId != null, Aftersale::getUserId, userId)
+                .eq(orderId != null, Aftersale::getOrderId, orderId)
                 .eq(query.getStatus() != null, Aftersale::getStatus, query.getStatus())
                 .eq(query.getAftersaleNo() != null && !query.getAftersaleNo().isBlank(),
-                        Aftersale::getAftersaleNo, query.getAftersaleNo())
-                .orderByDesc(Aftersale::getCreateTime).orderByDesc(Aftersale::getId);
+                        Aftersale::getAftersaleNo, query.getAftersaleNo() == null ? null : query.getAftersaleNo().trim())
+                .last("ORDER BY " + query.resolveSort(java.util.Map.of("createTime","create_time","updateTime","update_time","id","id","amount","amount"))
+                        + ("asc".equals(query.getOrder()) ? " ASC" : " DESC") + ", id " + ("asc".equals(query.getOrder()) ? "ASC" : "DESC"));
         Page<Aftersale> page = page(new Page<>(query.getPage(), query.getSize()), wrapper);
         return new PageResult<>(page.getRecords().stream().map(this::view).toList(),
                 page.getTotal(), page.getCurrent(), page.getSize(), page.getPages());
@@ -140,6 +163,20 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         return new AftersaleVO(row.getId(), row.getAftersaleNo(), row.getOrderId(),
                 order == null ? null : order.getOrderNo(), row.getAmount(), row.getStatus(),
                 row.getReason(), row.getReviewRemark(), row.getRefundReference(),
-                row.getCreateTime(), row.getUpdateTime());
+                row.getCreateTime(), row.getUpdateTime(), row.getReviewedBy(), row.getCompletionRemark(), row.getCompletedTime());
+    }
+    @Override public List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO> operationsAdmin(Long id) {
+        require(id,false); return operations(id);
+    }
+    @Override public List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO> operationsMine(Long userId,Long id) {
+        detailMine(userId,id); return operations(id);
+    }
+    private List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO> operations(Long id) {
+        return db.query("SELECT id,action,from_status,to_status,operator_id,operator_type,remark,occurred_at FROM aftersale_operation WHERE aftersale_id=? ORDER BY id",
+                (r,n)->new com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO(r.getLong(1),r.getString(2),r.getString(3),r.getString(4),r.getLong(5),r.getString(6),r.getString(7),r.getTimestamp(8).toLocalDateTime()),id);
+    }
+    private void record(Aftersale row,Long operator,String type,String action,String from,String remark) {
+        db.update("INSERT INTO aftersale_operation(aftersale_id,operator_id,operator_type,action,from_status,to_status,remark) VALUES(?,?,?,?,?,?,?)",
+                row.getId(),operator,type,action,from,row.getStatus(),remark);
     }
 }

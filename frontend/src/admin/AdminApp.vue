@@ -37,6 +37,7 @@ const sections = [
       { path: '/admin', label: '经营总览', icon: LayoutDashboard, exact: true },
       { path: '/admin/orders', label: '订单管理', icon: ShoppingBag, count: '12' },
       { path: '/admin/products', label: '商品管理', icon: Boxes },
+      { path: '/admin/categories', label: '分类管理', icon: Boxes },
       { path: '/admin/inventory', label: '库存管理', icon: Archive },
     ],
   },

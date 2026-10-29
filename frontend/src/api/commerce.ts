@@ -18,10 +18,11 @@ export const addressApi = {
 }
 
 export const orderApi = {
+  preview: (addressId: string, userCouponId?: string) => request<{ orderNo: string; checkoutToken: string; totalAmount: number; discountAmount: number; freightAmount: number; payAmount: number }>('/orders/preview', { method: 'POST', body: JSON.stringify({ addressId, userCouponId: userCouponId || null }) }),
   list: (page = 1, size = 20) => request<PageResult<Order>>(`/orders?page=${page}&size=${size}`),
-  create: (addressId: string) => request<Order>('/orders', {
+  create: (addressId: string, userCouponId?: string, quote?: { orderNo: string; checkoutToken: string }) => request<Order>('/orders', {
     method: 'POST',
-    body: JSON.stringify({ addressId: Number(addressId), requestId: crypto.randomUUID() }),
+    body: JSON.stringify({ addressId, userCouponId: userCouponId || null, ...(quote ? { orderNo: quote.orderNo, checkoutToken: quote.checkoutToken } : { requestId: crypto.randomUUID() }) }),
   }),
 }
 

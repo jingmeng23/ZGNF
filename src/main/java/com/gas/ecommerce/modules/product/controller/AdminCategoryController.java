@@ -3,8 +3,10 @@ package com.gas.ecommerce.modules.product.controller;
 import com.gas.ecommerce.common.annotation.RequiresPermission;
 import com.gas.ecommerce.common.result.Result;
 import com.gas.ecommerce.modules.product.dto.CategoryRequest;
+import com.gas.ecommerce.modules.product.dto.CategoryStatusRequest;
 import com.gas.ecommerce.modules.product.service.CatalogManagementService;
 import com.gas.ecommerce.modules.product.vo.CategoryVO;
+import com.gas.ecommerce.modules.product.vo.AdminCategoryVO;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +19,12 @@ public class AdminCategoryController {
 
     @GetMapping @RequiresPermission("category:read")
     public Result<List<CategoryVO>> list() { return Result.success(catalog.categories()); }
+    @GetMapping("/management") @RequiresPermission("category:read")
+    public Result<List<AdminCategoryVO>> management() { return Result.success(catalog.categoryOverview()); }
+    @PutMapping("/{id}/status") @RequiresPermission("category:write")
+    public Result<CategoryVO> status(@PathVariable Long id, @Valid @RequestBody CategoryStatusRequest request) {
+        return Result.success(catalog.categoryStatus(id, request.status()));
+    }
     @GetMapping("/{id}") @RequiresPermission("category:read")
     public Result<CategoryVO> detail(@PathVariable Long id) { return Result.success(catalog.category(id)); }
     @PostMapping @RequiresPermission("category:write")

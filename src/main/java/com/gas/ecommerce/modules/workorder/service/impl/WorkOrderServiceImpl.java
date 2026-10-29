@@ -24,6 +24,8 @@ import com.gas.ecommerce.modules.workorder.mapper.WorkOrderMapper;
 import com.gas.ecommerce.modules.workorder.service.WorkOrderService;
 import com.gas.ecommerce.modules.workorder.vo.WorkOrderLogVO;
 import com.gas.ecommerce.modules.workorder.vo.WorkOrderVO;
+import com.gas.ecommerce.modules.workorder.vo.WorkOrderOptionsVO;
+import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
@@ -79,11 +81,36 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
         active(userId,false); return pageOrders(userId,q);
     }
     @Override public PageResult<WorkOrderVO> listAdmin(WorkOrderQuery q) { return pageOrders(null,q); }
+    @Override public List<WorkOrderOptionsVO.StoreOption> stores() {
+        return db.query("SELECT id,name FROM store WHERE status='active' AND is_deleted=0 ORDER BY name,id",
+                (rs,n)->new WorkOrderOptionsVO.StoreOption(rs.getLong("id"),rs.getString("name")));
+    }
+    @Override public WorkOrderOptionsVO options() {
+        var candidates=db.query("SELECT DISTINCT e.id,COALESCE(e.name,e.username) AS name,e.store_id FROM employee e JOIN store s ON s.id=e.store_id AND s.status='active' AND s.is_deleted=0 JOIN employee_role er ON er.employee_id=e.id AND er.is_deleted=0 JOIN role r ON r.id=er.role_id AND r.status='active' AND r.is_deleted=0 JOIN role_permission rp ON rp.role_id=r.id AND rp.is_deleted=0 JOIN permission p ON p.id=rp.permission_id AND p.is_deleted=0 WHERE e.status='active' AND e.is_deleted=0 AND p.permission_key='workorder:process' ORDER BY e.id",
+                (rs,n)->new WorkOrderOptionsVO.EmployeeOption(rs.getLong("id"),rs.getString("name"),rs.getLong("store_id")));
+        return new WorkOrderOptionsVO(stores(),candidates);
+    }
+    @Override public PageResult<WorkOrderVO> listAssigned(Long employeeId,WorkOrderQuery q) {
+        employee(employeeId); return pageOrders(null,q,employeeId);
+    }
+    @Override public WorkOrderVO detailAssigned(Long employeeId,Long id) {
+        employee(employeeId); var w=require(id,false);
+        if(!employeeId.equals(w.getEmployeeId())) throw new AccessDeniedException("仅可查看本人被指派的工单");
+        return view(w);
+    }
+    @Override public PageResult<WorkOrderLogVO> logsAssigned(Long employeeId,Long id,PageRequest q) {
+        detailAssigned(employeeId,id); return logs(null,id,q);
+    }
     private PageResult<WorkOrderVO> pageOrders(Long userId,WorkOrderQuery q) {
+        return pageOrders(userId,q,null);
+    }
+    private PageResult<WorkOrderVO> pageOrders(Long userId,WorkOrderQuery q,Long assignedId) {
         String sort=q.resolveSort(Map.of("createTime","create_time","updateTime","update_time","appointmentTime","appointment_time"));
         var w=Wrappers.<WorkOrder>lambdaQuery().eq(userId!=null,WorkOrder::getUserId,userId)
                 .eq(q.getStatus()!=null,WorkOrder::getStatus,q.getStatus()).eq(q.getType()!=null,WorkOrder::getType,q.getType())
                 .eq(q.getStoreId()!=null,WorkOrder::getStoreId,q.getStoreId()).eq(q.getEmployeeId()!=null,WorkOrder::getEmployeeId,q.getEmployeeId());
+        w.eq(assignedId!=null,WorkOrder::getEmployeeId,assignedId);
+        if(Boolean.TRUE.equals(q.getOverdue())) w.in(WorkOrder::getStatus,List.of("pending","accepted","processing")).lt(WorkOrder::getAppointmentTime,LocalDateTime.now());
         if(q.getKeyword()!=null && !q.getKeyword().isBlank()) w.and(x->x.like(WorkOrder::getTitle,q.getKeyword()).or().like(WorkOrder::getWorkOrderNo,q.getKeyword()));
         w.last("ORDER BY "+sort+("asc".equals(q.getOrder())?" ASC":" DESC")+", id DESC");
         var p=page(new Page<>(q.getPage(),q.getSize()),w);

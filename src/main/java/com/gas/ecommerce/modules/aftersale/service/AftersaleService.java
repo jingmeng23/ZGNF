@@ -14,5 +14,7 @@ public interface AftersaleService extends IService<Aftersale> {
     PageResult<AftersaleVO> listAdmin(AftersaleQueryRequest query);
     AftersaleVO detailAdmin(Long id);
     AftersaleVO review(Long id, Long adminId, AftersaleReviewRequest request);
-    AftersaleVO complete(Long id, AftersaleCompleteRequest request);
+    AftersaleVO complete(Long id, Long adminId, AftersaleCompleteRequest request);
+    java.util.List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO> operationsAdmin(Long id);
+    java.util.List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO> operationsMine(Long userId, Long id);
 }

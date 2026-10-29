@@ -134,6 +134,70 @@ class OrganizationManagementIntegrationTests {
         mvc.perform(get("/api/v1/admin/auth/me").header("Authorization",bearer)).andExpect(status().isUnauthorized());
     }
 
+    @Test void employeeOptionsRespectReadAccessAndExposeOnlyFormMetadata() throws Exception {
+        long store=create(post("/api/v1/admin/stores"),storeBody());
+        db.update("INSERT INTO department(id,name) VALUES(900,'Operations')");
+        db.update("INSERT INTO position(id,name) VALUES(900,'Technician')");
+        db.update("INSERT INTO department(id,name,is_deleted) VALUES(901,'Deleted department',1)");
+        long employee=newEmployee(store),role=newRole();
+        putOk("/api/v1/admin/roles/"+role+"/permissions",Map.of("ids",List.of(permission("employee:read"))));
+        putOk("/api/v1/admin/employees/"+employee+"/roles",Map.of("ids",List.of(role)));
+        String reader="Bearer "+tokens.generateAccessToken(employee,"admin");
+        mvc.perform(get("/api/v1/admin/employees/options").header("Authorization",reader))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.canWrite").value(false))
+                .andExpect(jsonPath("$.data.canManageRoles").value(false))
+                .andExpect(jsonPath("$.data.currentEmployeeId").value(Long.toString(employee)))
+                .andExpect(jsonPath("$.data.stores[0].id").value(Long.toString(store)))
+                .andExpect(jsonPath("$.data.stores[0].phone").doesNotExist())
+                .andExpect(jsonPath("$.data.departments.length()").value(1))
+                .andExpect(jsonPath("$.data.positions[0].name").value("Technician"));
+        mvc.perform(get("/api/v1/admin/employees/options").header("Authorization",admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.canWrite").value(true))
+                .andExpect(jsonPath("$.data.canManageRoles").value(true));
+        mvc.perform(put("/api/v1/admin/employees/"+employee+"/status").header("Authorization",reader)
+                .contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/admin/employees/options")).andExpect(status().isUnauthorized());
+        putOk("/api/v1/admin/roles/"+role+"/permissions",Map.of("ids",List.of(permission("store:read"))));
+        mvc.perform(get("/api/v1/admin/employees/options").header("Authorization",reader)).andExpect(status().isForbidden());
+    }
+
+    @Test void employeeStatusEndpointPreservesProfileAndProtectsLastAdministrator() throws Exception {
+        long employee=newEmployee(null),role=newRole();
+        putOk("/api/v1/admin/employees/"+employee+"/roles",Map.of("ids",List.of(role)));
+        String staff="Bearer "+tokens.generateAccessToken(employee,"admin");
+        String hash=db.queryForObject("SELECT password_hash FROM employee WHERE id=?",String.class,employee);
+        putOk("/api/v1/admin/employees/"+employee+"/status",Map.of("status","inactive"));
+        mvc.perform(get("/api/v1/admin/employees/"+employee).header("Authorization",admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.username").value("clerk"))
+                .andExpect(jsonPath("$.data.phone").value("13800138000"))
+                .andExpect(jsonPath("$.data.status").value("inactive"));
+        assertEquals(hash,db.queryForObject("SELECT password_hash FROM employee WHERE id=?",String.class,employee));
+        mvc.perform(get("/api/v1/admin/auth/me").header("Authorization",staff)).andExpect(status().isUnauthorized());
+        for(String body:List.of("{}","{\"status\":\"deleted\"}")) {
+            mvc.perform(put("/api/v1/admin/employees/"+employee+"/status").header("Authorization",admin)
+                    .contentType("application/json").content(body)).andExpect(status().isBadRequest());
+        }
+        mvc.perform(put("/api/v1/admin/employees/7/status").header("Authorization",admin)
+                .contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isBadRequest());
+        assertEquals("active",db.queryForObject("SELECT status FROM employee WHERE id=7",String.class));
+        putOk("/api/v1/admin/employees/"+employee+"/status",Map.of("status","active"));
+        mvc.perform(get("/api/v1/admin/auth/me").header("Authorization",staff)).andExpect(status().isOk());
+    }
+
+    @Test void employeeStatusCannotInvalidateInProgressWorkOrder() throws Exception {
+        long store=create(post("/api/v1/admin/stores"),storeBody());
+        long employee=newEmployee(store), role=newRole();
+        putOk("/api/v1/admin/roles/"+role+"/permissions",Map.of("ids",List.of(permission("workorder:process"))));
+        putOk("/api/v1/admin/employees/"+employee+"/roles",Map.of("ids",List.of(role)));
+        db.update("INSERT INTO work_order(work_order_no,user_id,store_id,employee_id,type,status,title) VALUES('STAFF-GUARD',100,?,?,'repair','processing','Repair')",store,employee);
+        mvc.perform(put("/api/v1/admin/employees/"+employee+"/status").header("Authorization",admin)
+                .contentType("application/json").content("{\"status\":\"inactive\"}"))
+                .andExpect(status().isBadRequest());
+        assertEquals("active",db.queryForObject("SELECT status FROM employee WHERE id=?",String.class,employee));
+    }
+
     @Test void concurrentDisableCannotRemoveBothAdministrators() throws Exception {
         long second=newEmployee(null);
         long role=db.queryForObject("SELECT id FROM role WHERE role_key='admin'",Long.class);

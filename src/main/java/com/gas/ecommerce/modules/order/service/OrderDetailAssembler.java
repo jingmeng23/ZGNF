@@ -24,6 +24,14 @@ public class OrderDetailAssembler {
             var provider=logistics.getIfAvailable();
             if(provider!=null) shipment=provider.find(order.userId(),order.orderNo());
         } catch(RuntimeException ex) { metrics.counter("order.detail.logistics.degraded").increment(); }
+        var local=db.query("SELECT s.carrier,s.tracking_no,s.shipped_at FROM order_shipment s JOIN `order` o ON o.id=s.order_id WHERE o.id=? AND o.user_id=? AND o.is_deleted=0",
+                (r,n)->new OrderLogisticsVO(r.getString(1),r.getString(2),"已登记发货，登记时间："+r.getTimestamp(3).toLocalDateTime()),order.id(),order.userId());
+        if (!local.isEmpty()) {
+            var registered=local.getFirst();
+            // A stale downstream tracking number must not overwrite an administrator's correction.
+            shipment=shipment!=null && registered.trackingNo().equals(shipment.trackingNo()) && registered.carrier().equals(shipment.carrier())
+                    ? new OrderLogisticsVO(registered.carrier(),registered.trackingNo(),shipment.summary()) : registered;
+        }
         return order.withDetail(timeline,payments,shipment);
     }
 }

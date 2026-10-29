@@ -12,4 +12,5 @@ public class AftersaleQueryRequest extends PageRequest {
     @Pattern(regexp = "pending|approved|rejected|completed")
     private String status;
     @Size(max = 40) private String aftersaleNo;
+    @Size(max = 40) private String orderNo;
 }

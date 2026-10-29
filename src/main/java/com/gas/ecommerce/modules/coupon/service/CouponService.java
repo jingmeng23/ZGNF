@@ -49,7 +49,7 @@ public class CouponService {
         if(count>0 && (c.getAmount().compareTo(r.amount())!=0 || c.getMinimumAmount().compareTo(r.minimumAmount())!=0
                 || !c.getStartTime().equals(r.startTime()) || !c.getEndTime().equals(r.endTime())))
             throw error("已有用户领取，不能修改面额、门槛和有效期");
-        c.setName(r.name()); c.setAmount(r.amount()); c.setMinimumAmount(r.minimumAmount());
+        c.setName(r.name().strip()); c.setAmount(r.amount()); c.setMinimumAmount(r.minimumAmount());
         c.setStartTime(r.startTime()); c.setEndTime(r.endTime()); c.setQuantity(r.quantity());
         c.setStatus(r.status()==null?"active":r.status());
         if(id==null) { c.setIsDeleted(0); coupons.insert(c); } else coupons.updateById(c);
@@ -65,6 +65,7 @@ public class CouponService {
                 .eq(Coupon::getStatus,"active").le(Coupon::getStartTime,now).gt(Coupon::getEndTime,now)
                 .like(q.getKeyword()!=null && !q.getKeyword().isBlank(),Coupon::getName,q.getKeyword())
                 .apply("quantity > (SELECT COUNT(*) FROM user_coupon uc WHERE uc.coupon_id=coupon.id)")
+                .apply("NOT EXISTS (SELECT 1 FROM user_coupon mine WHERE mine.coupon_id=coupon.id AND mine.user_id={0})",userId)
                 .orderByDesc(Coupon::getCreateTime).orderByDesc(Coupon::getId));
         page.getRecords().forEach(this::decorate); return PageResult.from(page);
     }

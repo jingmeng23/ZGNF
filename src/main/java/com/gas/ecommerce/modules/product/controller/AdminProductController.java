@@ -33,6 +33,10 @@ public class AdminProductController {
     public Result<AdminProductVO> detail(@PathVariable Long id) {
         return Result.success(catalog.product(id));
     }
+    @GetMapping("/options") @RequiresPermission("product:read")
+    public Result<com.gas.ecommerce.modules.product.vo.ProductOptionsVO> options() {
+        return Result.success(catalog.productOptions());
+    }
     @PostMapping @RequiresPermission("product:write")
     public Result<AdminProductVO> create(@Valid @RequestBody ProductCreateRequest request) {
         return Result.success(catalog.create(request));

@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 public class AdminInventoryController {
     private final InventoryService service;
     public AdminInventoryController(InventoryService service) {this.service=service;}
+    @GetMapping("/options") @RequiresPermission("inventory:read")
+    public Result<InventoryOptionsVO> options() {return Result.success(service.options());}
     @GetMapping @RequiresPermission("inventory:read")
     public Result<PageResult<InventoryVO>> list(@Valid @ModelAttribute InventoryQuery q) {return Result.success(service.list(q));}
     @GetMapping("/{id}") @RequiresPermission("inventory:read")

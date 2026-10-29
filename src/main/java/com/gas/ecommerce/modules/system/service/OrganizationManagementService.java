@@ -31,6 +31,23 @@ public class OrganizationManagementService {
     public PageResult<Map<String,Object>> employees(ManagementQuery q) { return page("employee",q); }
     public PageResult<Map<String,Object>> roles(ManagementQuery q) { return page("role",q); }
 
+    /** 只返回表单需要的组织名称；无需额外授予门店或角色权限查询权限。 */
+    public Map<String,Object> employeeOptions() {
+        var auth=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        Set<String> authorities=new HashSet<>();
+        if(auth!=null) auth.getAuthorities().forEach(a->authorities.add(a.getAuthority()));
+        boolean bypass=authorities.contains("TEST_LOGIN_BYPASS");
+        Map<String,Object> result=new LinkedHashMap<>();
+        for(String table:List.of("store","department","position","role")) {
+            String key=switch(table) {case "store"->"stores"; case "department"->"departments"; case "position"->"positions"; default->"roles";};
+            result.put(key,db.query("SELECT id,name,status FROM "+table+" WHERE is_deleted=0 ORDER BY name,id",this::row));
+        }
+        result.put("canWrite",bypass||authorities.contains("employee:write"));
+        result.put("canManageRoles",bypass||authorities.contains("role:write"));
+        result.put("currentEmployeeId",SecurityUtils.currentUserId().toString());
+        return result;
+    }
+
     private PageResult<Map<String,Object>> page(String table, ManagementQuery q) {
         String sort=q.resolveSort(Map.of("createTime","create_time","updateTime","update_time","id","id","name","name","status","status"));
         StringBuilder where=new StringBuilder(" WHERE is_deleted=0");
@@ -128,6 +145,12 @@ public class OrganizationManagementService {
         if(id.equals(SecurityUtils.currentUserId())) throw new BusinessException("不能删除当前登录账号");
         softDelete("employee",id); ensureAdministrator(); ensureWorkOrderStaff();
         db.update("DELETE FROM employee_role WHERE employee_id=?",id);
+    }
+
+    @Transactional public Map<String,Object> changeEmployeeStatus(Long id,EmployeeStatusRequest r) {
+        lock(); employee(id);
+        db.update("UPDATE employee SET status=?,update_time=NOW() WHERE id=? AND is_deleted=0",r.status(),id);
+        ensureAdministrator(); ensureWorkOrderStaff(); return employee(id);
     }
 
     @Transactional public void resetPassword(Long id,PasswordRequest r) {

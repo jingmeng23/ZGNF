@@ -30,4 +30,8 @@ public class AftersaleController {
     public Result<AftersaleVO> cancel(@PathVariable Long id) {
         return Result.success(aftersales.cancelMine(SecurityUtils.currentUserId(), id));
     }
+    @GetMapping("/{id}/operations")
+    public Result<java.util.List<com.gas.ecommerce.modules.aftersale.vo.AftersaleOperationVO>> operations(@PathVariable Long id) {
+        return Result.success(aftersales.operationsMine(SecurityUtils.currentUserId(), id));
+    }
 }

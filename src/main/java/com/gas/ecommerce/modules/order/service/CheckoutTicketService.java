@@ -35,7 +35,9 @@ public class CheckoutTicketService {
         var row = rows.getFirst();
         if (request.checkoutToken()==null || !com.gas.ecommerce.common.utils.CheckoutDigest.sha256(request.checkoutToken()).equals(row.get("token_hash")))
             throw new BusinessException("结算Token无效");
-        LocalDateTime expires = ((java.sql.Timestamp) row.get("expire_time")).toLocalDateTime();
+        Object expiration = row.get("expire_time");
+        LocalDateTime expires = expiration instanceof LocalDateTime value
+                ? value : ((java.sql.Timestamp) expiration).toLocalDateTime();
         if (!expires.isAfter(LocalDateTime.now())) throw new BusinessException("结算预览已过期，请重新结算");
         return row;
     }

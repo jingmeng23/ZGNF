@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.mall.detail-cache.enabled=false")
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Sql(statements = "DROP ALL OBJECTS")
@@ -207,6 +207,47 @@ class AdminCatalogIntegrationTests {
                 .andExpect(jsonPath("$.data.brands[0].name").value("Editor brand"));
         mvc.perform(get("/api/v1/admin/products/options")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/admin/products/options").header("Authorization",userBearer)).andExpect(status().isForbidden());
+    }
+
+    @Test void productBrandCanBeEnteredReusedChangedAndCleared() throws Exception {
+        long category = category(0, "Free brand category");
+        String body = json.writeValueAsString(Map.of("categoryId", category, "name", "Cola", "price", 5,
+                "brandName", "  百事可乐  "));
+        var created = mvc.perform(post("/api/v1/admin/products").header("Authorization", bearer)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandName").value("百事可乐"))
+                .andReturn();
+        String id = json.readTree(created.getResponse().getContentAsString()).at("/data/id").asText();
+        String brandId = json.readTree(created.getResponse().getContentAsString()).at("/data/brandId").asText();
+        mvc.perform(post("/api/v1/admin/products").header("Authorization", bearer)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandId").value(brandId));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM brand WHERE name='百事可乐'", Integer.class));
+        mvc.perform(get("/api/v1/admin/products/" + id).header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandName").value("百事可乐"));
+        assertEquals("百事可乐", db.queryForObject(
+                "SELECT b.name FROM product p JOIN brand b ON b.id=p.brand_id WHERE p.id=?", String.class, Long.valueOf(id)));
+        setProductStatus(Long.valueOf(id), "on_sale", 200);
+        mvc.perform(get("/api/v1/products/" + id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandName").value("百事可乐"));
+        mvc.perform(get("/api/v1/mall/products/" + id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.product.brandName").value("百事可乐"));
+        mvc.perform(put("/api/v1/admin/products/" + id).header("Authorization", bearer)
+                        .contentType("application/json").content(body.replace("百事可乐", "任意新品牌")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandName").value("任意新品牌"));
+        mvc.perform(get("/api/v1/admin/products/" + id).header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandName").value("任意新品牌"));
+        mvc.perform(get("/api/v1/mall/products/" + id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.product.brandName").value("任意新品牌"));
+        mvc.perform(put("/api/v1/admin/products/" + id).header("Authorization", bearer)
+                        .contentType("application/json").content(body.replace("百事可乐", "")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.brandId").isEmpty())
+                .andExpect(jsonPath("$.data.brandName").isEmpty());
+        mvc.perform(get("/api/v1/mall/products/" + id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.product.brandName").isEmpty());
+        mvc.perform(post("/api/v1/admin/products").header("Authorization", bearer)
+                        .contentType("application/json").content(body.replace("百事可乐", "B".repeat(101))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test void productImagesRejectUnsafeUrlsAndStatusFiltersReflectChanges() throws Exception {

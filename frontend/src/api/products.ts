@@ -5,6 +5,7 @@ export type ProductStatus = 'draft' | 'on_sale' | 'off_sale' | 'sold_out' | 'pre
 export interface ProductInput {
   categoryId: string
   brandId: string | null
+  brandName?: string | null
   name: string
   subtitle: string | null
   coverUrl: string | null

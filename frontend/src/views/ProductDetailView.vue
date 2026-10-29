@@ -183,6 +183,7 @@ watch(() => route.params.id, load, { immediate: true })
       </div>
       <div>
         <h1>{{ product.name }}</h1>
+        <p v-if="product.brandName" class="product-brand">品牌：{{ product.brandName }}</p>
         <p>{{ product.subtitle }}</p>
         <div class="product-price">
           <strong>¥{{ displayPrice.toFixed(2) }}</strong

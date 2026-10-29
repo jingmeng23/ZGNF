@@ -9,6 +9,8 @@ import com.gas.ecommerce.modules.product.entity.Category;
 import com.gas.ecommerce.modules.product.entity.Product;
 import com.gas.ecommerce.modules.product.mapper.CategoryMapper;
 import com.gas.ecommerce.modules.product.mapper.ProductMapper;
+import com.gas.ecommerce.modules.product.mapper.BrandMapper;
+import com.gas.ecommerce.modules.product.entity.Brand;
 import com.gas.ecommerce.modules.product.vo.CategoryVO;
 import com.gas.ecommerce.modules.product.vo.ProductVO;
 import java.util.*;
@@ -20,9 +22,10 @@ public class ProductBrowseService {
     private final ProductMapper products;
     private final CategoryMapper categories;
     private final StockReadService inventory;
+    private final BrandMapper brands;
 
-    public ProductBrowseService(ProductMapper products, CategoryMapper categories, StockReadService inventory) {
-        this.products = products; this.categories = categories; this.inventory = inventory;
+    public ProductBrowseService(ProductMapper products, CategoryMapper categories, StockReadService inventory, BrandMapper brands) {
+        this.products = products; this.categories = categories; this.inventory = inventory; this.brands = brands;
     }
 
     public List<CategoryVO> categories() {
@@ -50,7 +53,7 @@ public class ProductBrowseService {
             }
         }
         if (categoryIds.isEmpty()) return empty(request);
-        var query = Wrappers.<Product>lambdaQuery().select(Product::getId, Product::getCategoryId,
+        var query = Wrappers.<Product>lambdaQuery().select(Product::getId, Product::getCategoryId, Product::getBrandId,
                         Product::getName, Product::getSubtitle, Product::getCoverUrl, Product::getPrice,
                         Product::getOriginalPrice, Product::getSales, Product::getCreateTime)
                 .eq(Product::getStatus, "on_sale")
@@ -97,10 +100,15 @@ public class ProductBrowseService {
         if (list.isEmpty()) return List.of();
         List<Long> ids = list.stream().map(Product::getId).toList();
         Map<Long, Long> stocks = inventory.products(ids);
+        Set<Long> brandIds = list.stream().map(Product::getBrandId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> brandNames = brandIds.isEmpty() ? Map.of() : brands.selectList(
+                Wrappers.<Brand>lambdaQuery().in(Brand::getId, brandIds)).stream()
+                .collect(Collectors.toMap(Brand::getId, Brand::getName));
         return list.stream().map(p -> new ProductVO(p.getId(), p.getCategoryId(), p.getName(), p.getSubtitle(),
                 p.getCoverUrl(), p.getPrice(), p.getOriginalPrice(), p.getSales(),
                 stocks.getOrDefault(p.getId(), 0L), includeDetails ? p.getDescription() : null,
                 !includeDetails || p.getDetailImages() == null || p.getDetailImages().isBlank()
-                        ? List.of() : Arrays.asList(p.getDetailImages().split("\n")))).toList();
+                        ? List.of() : Arrays.asList(p.getDetailImages().split("\n")),
+                p.getBrandId() == null ? null : brandNames.get(p.getBrandId()))).toList();
     }
 }

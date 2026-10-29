@@ -66,7 +66,7 @@ public class OrderSubmissionStore {
     public void lockForCommit(Claim claim) {
         var row=db.queryForMap("SELECT owner,phase,lease_until FROM order_submission WHERE order_no=? FOR UPDATE",claim.orderNo());
         if (!claim.owner().equals(row.get("owner")) || !"PROCESSING".equals(row.get("phase"))
-                || !((java.sql.Timestamp)row.get("lease_until")).toLocalDateTime().isAfter(LocalDateTime.now()))
+                || !leaseTime(row.get("lease_until")).isAfter(LocalDateTime.now()))
             throw new CheckoutConflictException("提交已进入补偿，不能保存订单");
     }
     @Transactional(propagation=Propagation.MANDATORY)
@@ -108,6 +108,9 @@ public class OrderSubmissionStore {
     }
     private void compensationMessage(String number) {
         db.update("INSERT INTO order_outbox(order_no,event_type,status,attempts,next_attempt_time) VALUES(?,'order.compensate','pending',0,CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE order_no=order_no",number);
+    }
+    private LocalDateTime leaseTime(Object value) {
+        return value instanceof LocalDateTime time ? time : ((java.sql.Timestamp) value).toLocalDateTime();
     }
     private String requestHash(OrderCreateRequest request) {
         try { return CheckoutDigest.sha256(json.writeValueAsString(request)); }

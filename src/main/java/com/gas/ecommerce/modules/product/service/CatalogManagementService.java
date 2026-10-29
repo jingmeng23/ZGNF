@@ -60,8 +60,9 @@ public class CatalogManagementService {
 
     @Transactional
     public AdminProductVO create(ProductCreateRequest r) {
-        lock(); validateReferences(r.categoryId(), r.brandId(), r.price(), r.originalPrice(), false);
-        Product p = new Product(); p.setCategoryId(r.categoryId()); p.setBrandId(r.brandId());
+        lock(); Long brandId = resolveBrand(r.brandId(), r.brandName());
+        validateReferences(r.categoryId(), brandId, r.price(), r.originalPrice(), false);
+        Product p = new Product(); p.setCategoryId(r.categoryId()); p.setBrandId(brandId);
         p.setName(r.name().trim()); p.setSubtitle(r.subtitle()); p.setCoverUrl(r.coverUrl());
         p.setDescription(r.description());
         p.setDetailImages(r.detailImages() == null ? null : String.join("\n", r.detailImages()));
@@ -72,10 +73,11 @@ public class CatalogManagementService {
     @Transactional
     public AdminProductVO update(Long id, ProductUpdateRequest r) {
         lock(); Product p = requireProduct(id);
-        validateReferences(r.categoryId(), r.brandId(), r.price(), r.originalPrice(), Set.of("on_sale", "presale", "scheduled", "sold_out").contains(p.getStatus()));
+        Long brandId = resolveBrand(r.brandId(), r.brandName());
+        validateReferences(r.categoryId(), brandId, r.price(), r.originalPrice(), Set.of("on_sale", "presale", "scheduled", "sold_out").contains(p.getStatus()));
         // 显式写入可空字段，允许 PUT 清除旧品牌、封面和原价。
         products.update(null, new UpdateWrapper<Product>().eq("id", id)
-                .set("category_id", r.categoryId()).set("brand_id", r.brandId()).set("name", r.name().trim())
+                .set("category_id", r.categoryId()).set("brand_id", brandId).set("name", r.name().trim())
                 .set("subtitle", r.subtitle()).set("cover_url", r.coverUrl()).set("price", r.price())
                 .set("description", r.description()).set("detail_images", r.detailImages() == null ? null : String.join("\n", r.detailImages()))
                 .set("original_price", r.originalPrice()).set("update_time", java.time.LocalDateTime.now()));
@@ -171,6 +173,22 @@ public class CatalogManagementService {
         }
     }
 
+    private Long resolveBrand(Long brandId, String brandName) {
+        // 旧客户端仍可传 brandId；自由输入的名称在目录事务锁内复用或创建。
+        if (brandName == null || brandName.isBlank()) return brandId;
+        String name = brandName.trim();
+        List<Long> existing = db.queryForList("SELECT id FROM brand WHERE name=?", Long.class, name);
+        if (!existing.isEmpty()) {
+            Long id = existing.getFirst();
+            db.update("UPDATE brand SET is_deleted=0 WHERE id=? AND is_deleted<>0", id);
+            return id;
+        }
+        Brand brand = new Brand();
+        brand.setName(name); brand.setStatus("active"); brand.setIsDeleted(0);
+        brands.insert(brand);
+        return brand.getId();
+    }
+
     private void validateReferences(Long categoryId, Long brandId, BigDecimal price, BigDecimal original, boolean onSale) {
         Category category = requireCategory(categoryId);
         if (onSale) {
@@ -202,6 +220,10 @@ public class CatalogManagementService {
         Set<Long> categoryIds = list.stream().map(Product::getCategoryId).collect(Collectors.toSet());
         Map<Long, String> names = categories.selectList(Wrappers.<Category>lambdaQuery().in(Category::getId, categoryIds))
                 .stream().collect(Collectors.toMap(Category::getId, Category::getName));
+        Set<Long> brandIds = list.stream().map(Product::getBrandId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> brandNames = brandIds.isEmpty() ? Map.of() : brands.selectList(
+                Wrappers.<Brand>lambdaQuery().in(Brand::getId, brandIds)).stream()
+                .collect(Collectors.toMap(Brand::getId, Brand::getName));
         List<Long> productIds = list.stream().map(Product::getId).toList();
         Map<Long, Long> stocks = new HashMap<>();
         for (Inventory i : inventory.selectList(Wrappers.<Inventory>lambdaQuery().in(Inventory::getProductId, productIds)))
@@ -209,6 +231,6 @@ public class CatalogManagementService {
         return list.stream().map(p -> new AdminProductVO(p.getId(), p.getCategoryId(), names.get(p.getCategoryId()),
                 p.getBrandId(), p.getName(), p.getSubtitle(), p.getCoverUrl(), p.getPrice(), p.getOriginalPrice(),
                 p.getStatus(), p.getSales(), stocks.getOrDefault(p.getId(), 0L), p.getCreateTime(), p.getUpdateTime(),
-                p.getDescription(), p.getDetailImages() == null || p.getDetailImages().isBlank() ? List.of() : Arrays.asList(p.getDetailImages().split("\\n")))).toList();
+                p.getDescription(), p.getDetailImages() == null || p.getDetailImages().isBlank() ? List.of() : Arrays.asList(p.getDetailImages().split("\\n")), p.getBrandId() == null ? null : brandNames.get(p.getBrandId()))).toList();
     }
 }

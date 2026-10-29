@@ -1,0 +1,350 @@
+{
+  "tag": "crud_1793240197743",
+  "base": "http://localhost:8080",
+  "ids": {
+    "store": "1",
+    "role": "2",
+    "employee": "1",
+    "category": "3",
+    "product": "1",
+    "address": "1",
+    "hotword": "1"
+  },
+  "results": [
+    {
+      "name": "health",
+      "status": "PASS",
+      "detail": {
+        "status": "UP"
+      }
+    },
+    {
+      "name": "user",
+      "status": "PASS",
+      "detail": {
+        "userId": "-1"
+      }
+    },
+    {
+      "name": "store",
+      "status": "PASS",
+      "detail": {
+        "id": "1"
+      }
+    },
+    {
+      "name": "role",
+      "status": "PASS",
+      "detail": {
+        "id": "2"
+      }
+    },
+    {
+      "name": "employee",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"必须保留至少一个有效的内置管理员账号\",\"data\":null,\"timestamp\":1793240198722,\"traceId\":\"fdb39291-db65-4655-8b16-d46c9a049d7c\"}"
+    },
+    {
+      "name": "category",
+      "status": "PASS",
+      "detail": {
+        "id": "3"
+      }
+    },
+    {
+      "name": "product",
+      "status": "PASS",
+      "detail": {
+        "id": "1"
+      }
+    },
+    {
+      "name": "inventory",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"操作员工不可用\",\"data\":null,\"timestamp\":1793240199604,\"traceId\":\"35e2c28b-76b7-4278-8d19-b008511d2643\"}"
+    },
+    {
+      "name": "product-on-sale",
+      "status": "PASS",
+      "detail": {
+        "id": "1",
+        "categoryId": "3",
+        "category": "crud_1793240197743_updated",
+        "brandId": null,
+        "name": "crud_1793240197743_updated",
+        "subtitle": null,
+        "coverUrl": null,
+        "price": 11,
+        "originalPrice": 12,
+        "status": "on_sale",
+        "sales": "0",
+        "stock": "0",
+        "createTime": "2026-10-29 10:16:39",
+        "updateTime": "2026-10-29 10:16:40",
+        "description": "crud_1793240197743",
+        "detailImages": []
+      }
+    },
+    {
+      "name": "address",
+      "status": "PASS",
+      "detail": {
+        "id": "1",
+        "receiver": "crud_1793240197743",
+        "phone": "13800138993",
+        "province": "Test",
+        "city": "Test",
+        "district": "Test",
+        "detail": "crud_1793240197743",
+        "isDefault": true,
+        "label": null,
+        "provinceCode": null,
+        "cityCode": null,
+        "districtCode": null,
+        "latitude": null,
+        "longitude": null,
+        "coordinateSystem": "WGS84",
+        "needsRegionCompletion": true,
+        "regionMessage": "请补全当前有效的省市区编码",
+        "suggestedDistrictCode": null
+      }
+    },
+    {
+      "name": "cart",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"商品可用库存不足\",\"data\":null,\"timestamp\":1793240200009,\"traceId\":\"68e13bc5-5449-436f-bfbf-13256fc10af0\"}"
+    },
+    {
+      "name": "coupon",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"请求参数格式错误\",\"data\":null,\"timestamp\":1793240200067,\"traceId\":\"f5588f37-8b37-4c7d-8eb4-ddef7828e309\"}"
+    },
+    {
+      "name": "coupon-claim",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"请求参数格式错误\",\"data\":null,\"timestamp\":1793240200077,\"traceId\":\"68704277-1725-403a-b37d-165e81e0de1d\"}"
+    },
+    {
+      "name": "mall",
+      "status": "PASS"
+    },
+    {
+      "name": "order-preview-create",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"请先选择购物车商品\",\"data\":null,\"timestamp\":1793240201285,\"traceId\":\"051dd74b-d928-476f-98a2-fc2c469b5498\"}"
+    },
+    {
+      "name": "payment-create",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"参数校验失败\",\"data\":{\"orderId\":\"must not be null\"},\"timestamp\":1793240201398,\"traceId\":\"4d819a1e-5fd8-4ff4-b88d-0b809fcaf881\"}"
+    },
+    {
+      "name": "aftersale",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"参数校验失败\",\"data\":{\"orderId\":\"must not be null\"},\"timestamp\":1793240201419,\"traceId\":\"f6091507-0d89-4d6e-99b5-4062f5fb94bc\"}"
+    },
+    {
+      "name": "workorder-create-cancel",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"请求参数格式错误\",\"data\":null,\"timestamp\":1793240201441,\"traceId\":\"72467cf9-81c5-4549-9845-d85fb6842c72\"}"
+    },
+    {
+      "name": "hotword",
+      "status": "PASS"
+    },
+    {
+      "name": "system-config",
+      "status": "PASS",
+      "detail": [
+        {
+          "configKey": "crud_1793240197743",
+          "configValue": "updated",
+          "description": "crud_1793240197743"
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/overview",
+      "status": "PASS",
+      "detail": {
+        "startDate": "2026-10-29",
+        "endDate": "2026-10-29",
+        "previousStartDate": "2026-10-28",
+        "previousEndDate": "2026-10-28",
+        "current": {
+          "createdOrders": 0,
+          "paidOrders": 0,
+          "receivedAmount": 0,
+          "refundedOrders": 0,
+          "refundAmount": 0,
+          "netReceivedAmount": 0,
+          "newCustomers": 0
+        },
+        "previous": {
+          "createdOrders": 0,
+          "paidOrders": 0,
+          "receivedAmount": 0,
+          "refundedOrders": 0,
+          "refundAmount": 0,
+          "netReceivedAmount": 0,
+          "newCustomers": 1
+        },
+        "receivedGrowthPercent": null,
+        "orderGrowthPercent": null,
+        "pendingWorkOrders": 0,
+        "overdueWorkOrders": 0,
+        "orderStatuses": {
+          "pending_payment": "0",
+          "paid": "0",
+          "processing": "0",
+          "completed": "0",
+          "cancelled": "0",
+          "refunded": "0"
+        },
+        "recentOrders": []
+      }
+    },
+    {
+      "name": "read /admin/statistics/trend",
+      "status": "PASS",
+      "detail": [
+        {
+          "date": "2026-10-29",
+          "metrics": {
+            "createdOrders": 0,
+            "paidOrders": 0,
+            "receivedAmount": 0,
+            "refundedOrders": 0,
+            "refundAmount": 0,
+            "netReceivedAmount": 0,
+            "newCustomers": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/products",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "name": "read /admin/statistics/stores",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "name": "read /admin/statistics/reports/daily",
+      "status": "PASS",
+      "detail": {
+        "list": [
+          {
+            "date": "2026-10-29",
+            "metrics": {
+              "createdOrders": 0,
+              "paidOrders": 0,
+              "receivedAmount": 0,
+              "refundedOrders": 0,
+              "refundAmount": 0,
+              "netReceivedAmount": 0,
+              "newCustomers": 0
+            }
+          }
+        ],
+        "total": 1,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      }
+    },
+    {
+      "name": "read /admin/logs",
+      "status": "PASS",
+      "detail": {
+        "list": [],
+        "total": 0,
+        "page": 1,
+        "size": 20,
+        "pages": 0
+      }
+    },
+    {
+      "name": "read /admin/employees/options",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"请求参数格式错误\",\"data\":null,\"timestamp\":1793240201742,\"traceId\":\"0053bc56-8542-4c0c-ab24-db4b58680f92\"}"
+    },
+    {
+      "name": "read /admin/aftersales",
+      "status": "PASS",
+      "detail": {
+        "list": [],
+        "total": 0,
+        "page": 1,
+        "size": 20,
+        "pages": 0
+      }
+    },
+    {
+      "name": "read /payments",
+      "status": "PASS",
+      "detail": {
+        "list": [],
+        "total": 0,
+        "page": 1,
+        "size": 20,
+        "pages": 0
+      }
+    },
+    {
+      "name": "product-off-sale",
+      "status": "PASS",
+      "detail": {
+        "id": "1",
+        "categoryId": "3",
+        "category": "crud_1793240197743_updated",
+        "brandId": null,
+        "name": "crud_1793240197743_updated",
+        "subtitle": null,
+        "coverUrl": null,
+        "price": 11,
+        "originalPrice": 12,
+        "status": "off_sale",
+        "sales": "0",
+        "stock": "0",
+        "createTime": "2026-10-29 10:16:39",
+        "updateTime": "2026-10-29 10:16:42",
+        "description": "crud_1793240197743",
+        "detailImages": []
+      }
+    },
+    {
+      "name": "product-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "category-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "employee-delete",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"必须保留至少一个有效的内置管理员账号\",\"data\":null,\"timestamp\":1793240201975,\"traceId\":\"b894157d-fe1d-4f9c-a43f-56340d65b454\"}"
+    },
+    {
+      "name": "role-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "store-delete",
+      "status": "FAIL",
+      "error": "400 {\"code\":400001,\"message\":\"门店存在员工、库存或工单，不能删除\",\"data\":null,\"timestamp\":1793240202401,\"traceId\":\"54a6d45b-d0ab-4f07-8f07-afd51a8f2ab2\"}"
+    },
+    {
+      "name": "address-delete",
+      "status": "PASS",
+      "detail": null
+    }
+  ]
+}

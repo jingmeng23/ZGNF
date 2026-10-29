@@ -1,0 +1,853 @@
+{
+  "tag": "crud_1793240870798",
+  "base": "http://localhost:18080",
+  "ids": {
+    "store": "5",
+    "role": "5",
+    "employee": "5",
+    "category": "4",
+    "product": "4",
+    "inventory": "4",
+    "address": "4",
+    "cart": "4",
+    "coupon": "4",
+    "userCoupon": "4",
+    "order": "4",
+    "payment": "3",
+    "aftersale": "3",
+    "workorder": "5",
+    "completedWorkorder": "6",
+    "cancelledOrder": "5",
+    "hotword": "4"
+  },
+  "results": [
+    {
+      "name": "health",
+      "status": "PASS",
+      "detail": {
+        "status": "UP"
+      }
+    },
+    {
+      "name": "user",
+      "status": "PASS",
+      "detail": {
+        "userId": "1"
+      }
+    },
+    {
+      "name": "store",
+      "status": "PASS",
+      "detail": {
+        "id": "5"
+      }
+    },
+    {
+      "name": "role",
+      "status": "PASS",
+      "detail": {
+        "id": "5"
+      }
+    },
+    {
+      "name": "employee",
+      "status": "PASS",
+      "detail": {
+        "id": "5"
+      }
+    },
+    {
+      "name": "category",
+      "status": "PASS",
+      "detail": {
+        "id": "4"
+      }
+    },
+    {
+      "name": "product",
+      "status": "PASS",
+      "detail": {
+        "id": "4"
+      }
+    },
+    {
+      "name": "inventory",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "productId": "4",
+        "productName": "crud_1793240870798_updated",
+        "storeId": null,
+        "storeName": "总部仓",
+        "quantity": 10,
+        "lockedQuantity": 0,
+        "availableQuantity": 10,
+        "version": 3,
+        "createTime": "2026-10-29 10:27:52",
+        "updateTime": "2026-10-29 10:27:51"
+      }
+    },
+    {
+      "name": "product-on-sale",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "categoryId": "4",
+        "category": "crud_1793240870798_updated",
+        "brandId": null,
+        "name": "crud_1793240870798_updated",
+        "subtitle": null,
+        "coverUrl": null,
+        "price": 11,
+        "originalPrice": 12,
+        "status": "on_sale",
+        "sales": "0",
+        "stock": "10",
+        "createTime": "2026-10-29 10:27:52",
+        "updateTime": "2026-10-29 10:27:52",
+        "description": "crud_1793240870798",
+        "detailImages": []
+      }
+    },
+    {
+      "name": "address",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "receiver": "crud_1793240870798",
+        "phone": "13800138993",
+        "province": "Test",
+        "city": "Test",
+        "district": "Test",
+        "detail": "crud_1793240870798",
+        "isDefault": true,
+        "label": null,
+        "provinceCode": null,
+        "cityCode": null,
+        "districtCode": null,
+        "latitude": null,
+        "longitude": null,
+        "coordinateSystem": "WGS84",
+        "needsRegionCompletion": true,
+        "regionMessage": "请补全当前有效的省市区编码",
+        "suggestedDistrictCode": null
+      }
+    },
+    {
+      "name": "cart",
+      "status": "PASS",
+      "detail": {
+        "id": "4"
+      }
+    },
+    {
+      "name": "coupon",
+      "status": "PASS",
+      "detail": {
+        "id": "4"
+      }
+    },
+    {
+      "name": "coupon-claim",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "couponId": "4",
+        "name": "crud_1793240870798_updated",
+        "amount": 1,
+        "minimumAmount": 1,
+        "startTime": "2026-01-01 00:00:00",
+        "expireTime": "2027-12-31 23:59:59",
+        "status": "unused",
+        "usedOrderId": null,
+        "createTime": "2026-10-29 10:27:52"
+      }
+    },
+    {
+      "name": "mall",
+      "status": "PASS"
+    },
+    {
+      "name": "order-preview-create",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "userId": "1",
+        "orderNo": "OD20261029000000000005",
+        "status": "pending_payment",
+        "totalAmount": 22,
+        "payAmount": 22,
+        "userCouponId": null,
+        "discountAmount": 0,
+        "remark": null,
+        "createTime": "2026-10-29 10:27:52",
+        "expireTime": "2026-10-29 10:57:52",
+        "address": {
+          "receiver": "crud_1793240870798_updated",
+          "phone": "13800138993",
+          "province": "Test",
+          "city": "Test",
+          "district": "Test",
+          "detail": "crud_1793240870798",
+          "provinceCode": null,
+          "cityCode": null,
+          "districtCode": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "items": [
+          {
+            "productId": "4",
+            "productName": "crud_1793240870798_updated",
+            "productImage": null,
+            "quantity": 2,
+            "unitPrice": 11,
+            "amount": 22,
+            "discountAmount": 0,
+            "payAmount": 22
+          }
+        ],
+        "freightAmount": 0,
+        "fullReductionAmount": 0,
+        "couponDiscountAmount": 0,
+        "timeline": [],
+        "payments": []
+      }
+    },
+    {
+      "name": "payment-create-callback-ship-receive",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "userId": "1",
+        "orderNo": "OD20261029000000000005",
+        "status": "completed",
+        "totalAmount": 22,
+        "payAmount": 22,
+        "userCouponId": null,
+        "discountAmount": 0,
+        "remark": null,
+        "createTime": "2026-10-29 10:27:53",
+        "expireTime": "2026-10-29 10:57:53",
+        "address": {
+          "receiver": "crud_1793240870798_updated",
+          "phone": "13800138993",
+          "province": "Test",
+          "city": "Test",
+          "district": "Test",
+          "detail": "crud_1793240870798",
+          "provinceCode": null,
+          "cityCode": null,
+          "districtCode": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "items": [
+          {
+            "productId": "4",
+            "productName": "crud_1793240870798_updated",
+            "productImage": null,
+            "quantity": 2,
+            "unitPrice": 11,
+            "amount": 22,
+            "discountAmount": 0,
+            "payAmount": 22
+          }
+        ],
+        "freightAmount": 0,
+        "fullReductionAmount": 0,
+        "couponDiscountAmount": 0,
+        "timeline": [],
+        "payments": []
+      }
+    },
+    {
+      "name": "aftersale",
+      "status": "PASS",
+      "detail": {
+        "id": "3",
+        "aftersaleNo": "AS20261029102753A0A2B114F1B3",
+        "orderId": "4",
+        "orderNo": "OD20261029000000000005",
+        "amount": 22,
+        "status": "completed",
+        "reason": "crud_1793240870798",
+        "reviewRemark": "crud_1793240870798",
+        "refundReference": "crud_1793240870798",
+        "createTime": "2026-10-29 10:27:53",
+        "updateTime": "2026-10-29 10:27:53",
+        "reviewedBy": "1",
+        "completionRemark": "crud_1793240870798",
+        "completedTime": "2026-10-29 10:27:53"
+      }
+    },
+    {
+      "name": "workorder-create-cancel",
+      "status": "PASS",
+      "detail": {
+        "id": "5",
+        "workOrderNo": "WOba434e1575e5465b919ba6300bff2a39",
+        "userId": "1",
+        "storeId": "5",
+        "employeeId": null,
+        "title": "crud_1793240870798",
+        "description": "crud_1793240870798",
+        "type": "inspection",
+        "status": "cancelled",
+        "address": {
+          "receiver": "crud_1793240870798_updated",
+          "phone": "13800138993",
+          "province": "Test",
+          "city": "Test",
+          "district": "Test",
+          "detail": "crud_1793240870798",
+          "provinceCode": null,
+          "cityCode": null,
+          "districtCode": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "appointmentTime": "2026-11-15 10:00:00",
+        "acceptedTime": null,
+        "startedTime": null,
+        "completedTime": null,
+        "result": null,
+        "createTime": "2026-10-29 10:27:53",
+        "updateTime": "2026-10-29 10:27:53"
+      }
+    },
+    {
+      "name": "workorder-assign-start-complete",
+      "status": "PASS",
+      "detail": {
+        "id": "6",
+        "workOrderNo": "WO443ba4129b96461d88e0b7f9991cfd62",
+        "userId": "1",
+        "storeId": "5",
+        "employeeId": "5",
+        "title": "crud_1793240870798",
+        "description": "crud_1793240870798",
+        "type": "repair",
+        "status": "completed",
+        "address": {
+          "receiver": "crud_1793240870798_updated",
+          "phone": "13800138993",
+          "province": "Test",
+          "city": "Test",
+          "district": "Test",
+          "detail": "crud_1793240870798",
+          "provinceCode": null,
+          "cityCode": null,
+          "districtCode": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "appointmentTime": "2026-11-15 10:00:00",
+        "acceptedTime": "2026-10-29 10:27:53",
+        "startedTime": "2026-10-29 10:27:53",
+        "completedTime": "2026-10-29 10:27:53",
+        "result": "crud_1793240870798",
+        "createTime": "2026-10-29 10:27:53",
+        "updateTime": "2026-10-29 10:27:53"
+      }
+    },
+    {
+      "name": "order-cancel-stock-coupon-release",
+      "status": "PASS",
+      "detail": {
+        "id": "5",
+        "userId": "1",
+        "orderNo": "OD20261029000000000006",
+        "status": "cancelled",
+        "totalAmount": 11,
+        "payAmount": 10,
+        "userCouponId": "4",
+        "discountAmount": 1,
+        "remark": null,
+        "createTime": "2026-10-29 10:27:54",
+        "expireTime": "2026-10-29 10:57:54",
+        "address": {
+          "receiver": "crud_1793240870798_updated",
+          "phone": "13800138993",
+          "province": "Test",
+          "city": "Test",
+          "district": "Test",
+          "detail": "crud_1793240870798",
+          "provinceCode": null,
+          "cityCode": null,
+          "districtCode": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "items": [
+          {
+            "productId": "4",
+            "productName": "crud_1793240870798_updated",
+            "productImage": null,
+            "quantity": 1,
+            "unitPrice": 11,
+            "amount": 11,
+            "discountAmount": 1,
+            "payAmount": 10
+          }
+        ],
+        "freightAmount": 0,
+        "fullReductionAmount": 0,
+        "couponDiscountAmount": 1,
+        "timeline": [],
+        "payments": []
+      }
+    },
+    {
+      "name": "cart-delete-explicit",
+      "status": "PASS"
+    },
+    {
+      "name": "hotword",
+      "status": "PASS"
+    },
+    {
+      "name": "system-config",
+      "status": "PASS",
+      "detail": [
+        {
+          "configKey": "crud_1793240418433",
+          "configValue": "updated",
+          "description": "crud_1793240418433"
+        },
+        {
+          "configKey": "crud_1793240682596",
+          "configValue": "updated",
+          "description": "crud_1793240682596"
+        },
+        {
+          "configKey": "crud_1793240772232",
+          "configValue": "updated",
+          "description": "crud_1793240772232"
+        },
+        {
+          "configKey": "crud_1793240870798",
+          "configValue": "updated",
+          "description": "crud_1793240870798"
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/overview",
+      "status": "PASS",
+      "detail": {
+        "startDate": "2026-10-29",
+        "endDate": "2026-10-29",
+        "previousStartDate": "2026-10-28",
+        "previousEndDate": "2026-10-28",
+        "current": {
+          "createdOrders": 5,
+          "paidOrders": 3,
+          "receivedAmount": 66,
+          "refundedOrders": 3,
+          "refundAmount": 66,
+          "netReceivedAmount": 0,
+          "newCustomers": 1
+        },
+        "previous": {
+          "createdOrders": 0,
+          "paidOrders": 0,
+          "receivedAmount": 0,
+          "refundedOrders": 0,
+          "refundAmount": 0,
+          "netReceivedAmount": 0,
+          "newCustomers": 0
+        },
+        "receivedGrowthPercent": null,
+        "orderGrowthPercent": null,
+        "pendingWorkOrders": 0,
+        "overdueWorkOrders": 0,
+        "orderStatuses": {
+          "pending_payment": "0",
+          "paid": "0",
+          "processing": "0",
+          "completed": "0",
+          "cancelled": "2",
+          "refunded": "3"
+        },
+        "recentOrders": [
+          {
+            "id": "5",
+            "orderNo": "OD20261029000000000006",
+            "status": "cancelled",
+            "payAmount": 10,
+            "createTime": "2026-10-29 10:27:54"
+          },
+          {
+            "id": "4",
+            "orderNo": "OD20261029000000000005",
+            "status": "refunded",
+            "payAmount": 22,
+            "createTime": "2026-10-29 10:27:53"
+          },
+          {
+            "id": "3",
+            "orderNo": "OD20261029000000000004",
+            "status": "cancelled",
+            "payAmount": 10,
+            "createTime": "2026-10-29 10:26:17"
+          },
+          {
+            "id": "2",
+            "orderNo": "OD20261029000000000003",
+            "status": "refunded",
+            "payAmount": 22,
+            "createTime": "2026-10-29 10:26:16"
+          },
+          {
+            "id": "1",
+            "orderNo": "OD20261029000000000002",
+            "status": "refunded",
+            "payAmount": 22,
+            "createTime": "2026-10-29 10:24:46"
+          }
+        ]
+      }
+    },
+    {
+      "name": "read /admin/statistics/trend",
+      "status": "PASS",
+      "detail": [
+        {
+          "date": "2026-10-29",
+          "metrics": {
+            "createdOrders": 5,
+            "paidOrders": 3,
+            "receivedAmount": 66,
+            "refundedOrders": 3,
+            "refundAmount": 66,
+            "netReceivedAmount": 0,
+            "newCustomers": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/products",
+      "status": "PASS",
+      "detail": [
+        {
+          "productId": "2",
+          "productName": "crud_1793240682596_updated",
+          "paidOrders": 1,
+          "quantity": 2,
+          "merchandiseAmount": 22
+        },
+        {
+          "productId": "3",
+          "productName": "crud_1793240772232_updated",
+          "paidOrders": 1,
+          "quantity": 2,
+          "merchandiseAmount": 22
+        },
+        {
+          "productId": "4",
+          "productName": "crud_1793240870798_updated",
+          "paidOrders": 1,
+          "quantity": 2,
+          "merchandiseAmount": 22
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/stores",
+      "status": "PASS",
+      "detail": [
+        {
+          "storeId": "3",
+          "storeName": "crud_1793240772232_updated",
+          "createdWorkOrders": 2,
+          "completedWorkOrders": 1,
+          "openWorkOrders": 0
+        },
+        {
+          "storeId": "5",
+          "storeName": "crud_1793240870798_updated",
+          "createdWorkOrders": 2,
+          "completedWorkOrders": 1,
+          "openWorkOrders": 0
+        },
+        {
+          "storeId": "1",
+          "storeName": "crud_1793240418433_updated",
+          "createdWorkOrders": 1,
+          "completedWorkOrders": 0,
+          "openWorkOrders": 0
+        },
+        {
+          "storeId": "2",
+          "storeName": "crud_1793240682596_updated",
+          "createdWorkOrders": 1,
+          "completedWorkOrders": 0,
+          "openWorkOrders": 0
+        }
+      ]
+    },
+    {
+      "name": "read /admin/statistics/reports/daily",
+      "status": "PASS",
+      "detail": {
+        "list": [
+          {
+            "date": "2026-10-29",
+            "metrics": {
+              "createdOrders": 5,
+              "paidOrders": 3,
+              "receivedAmount": 66,
+              "refundedOrders": 3,
+              "refundAmount": 66,
+              "netReceivedAmount": 0,
+              "newCustomers": 1
+            }
+          }
+        ],
+        "total": 1,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      }
+    },
+    {
+      "name": "read /admin/logs",
+      "status": "PASS",
+      "detail": {
+        "list": [],
+        "total": 0,
+        "page": 1,
+        "size": 20,
+        "pages": 0
+      }
+    },
+    {
+      "name": "read /admin/employees/options",
+      "status": "PASS",
+      "detail": {
+        "stores": [
+          {
+            "id": "1",
+            "name": "crud_1793240418433_updated",
+            "status": "active"
+          },
+          {
+            "id": "2",
+            "name": "crud_1793240682596_updated",
+            "status": "active"
+          },
+          {
+            "id": "3",
+            "name": "crud_1793240772232_updated",
+            "status": "active"
+          },
+          {
+            "id": "5",
+            "name": "crud_1793240870798_updated",
+            "status": "active"
+          }
+        ],
+        "departments": [],
+        "positions": [],
+        "roles": [
+          {
+            "id": "5",
+            "name": "crud_1793240870798_updated",
+            "status": "active"
+          },
+          {
+            "id": "1",
+            "name": "商城管理员",
+            "status": "active"
+          }
+        ],
+        "canWrite": true,
+        "canManageRoles": true,
+        "currentEmployeeId": "1"
+      }
+    },
+    {
+      "name": "read /admin/aftersales",
+      "status": "PASS",
+      "detail": {
+        "list": [
+          {
+            "id": "3",
+            "aftersaleNo": "AS20261029102753A0A2B114F1B3",
+            "orderId": "4",
+            "orderNo": "OD20261029000000000005",
+            "amount": 22,
+            "status": "completed",
+            "reason": "crud_1793240870798",
+            "reviewRemark": "crud_1793240870798",
+            "refundReference": "crud_1793240870798",
+            "createTime": "2026-10-29 10:27:53",
+            "updateTime": "2026-10-29 10:27:53",
+            "reviewedBy": "1",
+            "completionRemark": "crud_1793240870798",
+            "completedTime": "2026-10-29 10:27:53"
+          },
+          {
+            "id": "2",
+            "aftersaleNo": "AS20261029102616EC8E7310675D",
+            "orderId": "2",
+            "orderNo": "OD20261029000000000003",
+            "amount": 22,
+            "status": "completed",
+            "reason": "crud_1793240772232",
+            "reviewRemark": "crud_1793240772232",
+            "refundReference": "crud_1793240772232",
+            "createTime": "2026-10-29 10:26:16",
+            "updateTime": "2026-10-29 10:26:16",
+            "reviewedBy": "1",
+            "completionRemark": "crud_1793240772232",
+            "completedTime": "2026-10-29 10:26:16"
+          },
+          {
+            "id": "1",
+            "aftersaleNo": "AS20261029102446D22538C71B5A",
+            "orderId": "1",
+            "orderNo": "OD20261029000000000002",
+            "amount": 22,
+            "status": "completed",
+            "reason": "crud_1793240682596",
+            "reviewRemark": "crud_1793240682596",
+            "refundReference": "crud_1793240682596",
+            "createTime": "2026-10-29 10:24:47",
+            "updateTime": "2026-10-29 10:24:47",
+            "reviewedBy": "1",
+            "completionRemark": "crud_1793240682596",
+            "completedTime": "2026-10-29 10:24:47"
+          }
+        ],
+        "total": 3,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      }
+    },
+    {
+      "name": "read /payments",
+      "status": "PASS",
+      "detail": {
+        "list": [
+          {
+            "id": "3",
+            "paymentNo": "PAY2026102900000003",
+            "orderId": "4",
+            "amount": 22,
+            "channel": "test",
+            "status": "refunded",
+            "paidTime": "2026-10-29 10:27:52"
+          },
+          {
+            "id": "2",
+            "paymentNo": "PAY2026102900000002",
+            "orderId": "2",
+            "amount": 22,
+            "channel": "test",
+            "status": "refunded",
+            "paidTime": "2026-10-29 10:26:15"
+          },
+          {
+            "id": "1",
+            "paymentNo": "PAY2026102900000001",
+            "orderId": "1",
+            "amount": 22,
+            "channel": "test",
+            "status": "refunded",
+            "paidTime": "2026-10-29 10:24:46"
+          }
+        ],
+        "total": 3,
+        "page": 1,
+        "size": 20,
+        "pages": 1
+      }
+    },
+    {
+      "name": "inventory-zero",
+      "status": "PASS",
+      "detail": {
+        "id": "29",
+        "inventoryId": "4",
+        "productId": "4",
+        "storeId": null,
+        "changeType": "adjustment",
+        "changeQuantity": -8,
+        "quantityBefore": 8,
+        "quantityAfter": 0,
+        "lockedBefore": 0,
+        "lockedAfter": 0,
+        "operatorId": "1",
+        "requestId": "crud_1793240870798_zero",
+        "referenceNo": null,
+        "remark": "crud_1793240870798",
+        "createTime": "2026-10-29 10:28:06"
+      }
+    },
+    {
+      "name": "product-off-sale",
+      "status": "PASS",
+      "detail": {
+        "id": "4",
+        "categoryId": "4",
+        "category": "crud_1793240870798_updated",
+        "brandId": null,
+        "name": "crud_1793240870798_updated",
+        "subtitle": null,
+        "coverUrl": null,
+        "price": 11,
+        "originalPrice": 12,
+        "status": "off_sale",
+        "sales": "0",
+        "stock": "0",
+        "createTime": "2026-10-29 10:27:52",
+        "updateTime": "2026-10-29 10:28:06",
+        "description": "crud_1793240870798",
+        "detailImages": []
+      }
+    },
+    {
+      "name": "product-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "category-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "employee-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "role-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "coupon-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "address-delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "store-delete-linked-protection",
+      "status": "PASS",
+      "detail": "linked workorders correctly prevent deletion"
+    },
+    {
+      "name": "store-delete-unlinked",
+      "status": "PASS"
+    }
+  ]
+}

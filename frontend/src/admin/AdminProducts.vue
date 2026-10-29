@@ -53,6 +53,7 @@ const categoryForm = reactive({
 const blank = (): ProductInput => ({
   categoryId: '',
   brandId: null,
+  brandName: '',
   name: '',
   subtitle: '',
   coverUrl: '',
@@ -150,6 +151,10 @@ async function open(row?: AdminProduct, detail = false) {
         ? {
             categoryId: product.categoryId,
             brandId: product.brandId,
+            brandName:
+              product.brandName ??
+              options.value.brands.find((b) => b.id === product.brandId)?.name ??
+              '',
             name: product.name,
             subtitle: product.subtitle,
             coverUrl: product.coverUrl,
@@ -202,9 +207,10 @@ async function save() {
   }
   busy.value = true
   try {
-    await productsApi.save(selected.value?.id || null, {
+    const saved = await productsApi.save(selected.value?.id || null, {
       categoryId: form.categoryId,
-      brandId: form.brandId || null,
+      brandId: null,
+      brandName: form.brandName?.trim() || null,
       name: form.name.trim(),
       subtitle: form.subtitle?.trim() || null,
       coverUrl: form.coverUrl?.trim() || null,
@@ -216,8 +222,19 @@ async function save() {
       description: form.description?.trim() || null,
       detailImages,
     })
+    if ((saved.brandName?.trim() || '') !== (form.brandName?.trim() || '')) {
+      throw new Error('商品接口返回的品牌与填写内容不一致，请确认后端已更新至支持品牌名称的版本，再重新保存。')
+    }
     const created = mode.value === 'create'
     mode.value = null
+    if (created) {
+      // 回到完整列表，避免只展示新商品的分类或草稿状态而隐藏已有商品。
+      query.keyword = ''
+      query.categoryId = ''
+      query.status = ''
+      query.sort = 'createTime'
+      query.order = 'desc'
+    }
     if (created && query.page !== 1) query.page = 1
     else await load()
     notice.value = created ? '商品已创建为草稿，请完成库存配置后上架。' : '商品保存成功'
@@ -372,7 +389,11 @@ async function remove(row: AdminProduct) {
           </select></label
         ><button class="secondary-button" :disabled="busy">保存分类</button>
       </form>
-      <form @submit.prevent="save">
+      <p v-if="error" class="demo-banner" role="alert">{{ error }}</p>
+      <form
+        @submit.prevent="save"
+        @invalid.capture="error = '请检查并填写必填项，价格最多保留两位小数。'"
+      >
         <fieldset :disabled="busy || readonly" class="product-fields">
           <label>商品名称 *<input v-model="form.name" required maxlength="200" /></label>
           <label
@@ -390,19 +411,11 @@ async function remove(row: AdminProduct) {
             </select></label
           >
           <label
-            >品牌<select v-model="form.brandId">
-              <option :value="null">不设置品牌</option>
-              <option v-for="b in options.brands" :key="b.id" :value="b.id">
-                {{ b.name }}{{ b.status !== 'active' ? '（已停用）' : '' }}
-              </option>
-              <option
-                v-if="form.brandId && !options.brands.some((b) => b.id === form.brandId)"
-                :value="form.brandId"
-              >
-                原品牌已不可用，请重新选择
-              </option>
-            </select></label
-          >
+            >品牌<input
+              v-model="form.brandName"
+              maxlength="100"
+              placeholder="请输入品牌名称，可留空"
+          /></label>
           <label
             >销售价（元）*<input
               v-model.number="form.price"
@@ -425,8 +438,11 @@ async function remove(row: AdminProduct) {
             >封面图片地址<input
               v-model="form.coverUrl"
               maxlength="512"
-              placeholder="https://… 或 /images/…"
-          /></label>
+              placeholder="https://… 或 /images/products/pepsi.png"
+            /><small
+              >请填写网络图片地址或网站内路径，例如 /images/products/pepsi.png。</small
+            ></label
+          >
           <div class="cover-preview">
             <ProductImage :src="form.coverUrl" :alt="form.name || '商品封面预览'" kind="stove" />
           </div>
@@ -533,6 +549,7 @@ async function remove(row: AdminProduct) {
               <td>
                 {{ row.category || '分类不可用'
                 }}<small>{{
+                  row.brandName ||
                   options.brands.find((b) => b.id === row.brandId)?.name ||
                   (row.brandId ? '品牌不可用' : '无品牌')
                 }}</small>

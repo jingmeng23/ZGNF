@@ -5,4 +5,4 @@ import java.math.BigDecimal;
  */
 public record ProductVO(Long id, Long categoryId, String name, String subtitle, String coverUrl,
         BigDecimal price, BigDecimal originalPrice, Long sales, long availableStock,
-        String description, java.util.List<String> detailImages) { }
+        String description, java.util.List<String> detailImages, String brandName) { }

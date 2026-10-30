@@ -2,8 +2,8 @@ server:
   port: 8080
 app:
   security:
-    # Temporary global no-login testing; restore with LOGIN_DISABLED=false.
-    login-disabled: ${LOGIN_DISABLED:true}
+    # Login is required by default; set LOGIN_DISABLED=true only for temporary testing.
+    login-disabled: ${LOGIN_DISABLED:false}
     # Temporary local personnel/role management testing. Set false to restore login.
     local-management-bypass: ${LOCAL_MANAGEMENT_BYPASS:false}
   addresses:

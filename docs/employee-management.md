@@ -38,7 +38,7 @@
 
 不新增数据库迁移，沿用现有组织管理及工单迁移。开发运行后端 `mvn spring-boot:run`，前端在 `frontend` 中运行 `npm run dev`，访问 `http://localhost:5173/#/admin/employees`。Vite 将 `/api` 代理到 `http://localhost:8080`，可用 `VITE_API_PROXY_TARGET` 覆盖。
 
-现有免登录开发开关保留。正式认证运行时设置后端 `LOGIN_DISABLED=false`、`LOCAL_MANAGEMENT_BYPASS=false`，前端 `VITE_LOGIN_DISABLED=false`、`VITE_LOCAL_MANAGEMENT_BYPASS=false` 并重新构建，使用具有 `employee:read` 和所需写权限的账号。
+登录校验默认启用。仅在临时开发测试时，才显式设置后端 `LOGIN_DISABLED=true` 和前端 `VITE_LOGIN_DISABLED=true`；正式运行请保持后端 `LOGIN_DISABLED=false`、`LOCAL_MANAGEMENT_BYPASS=false`，前端 `VITE_LOGIN_DISABLED=false`、`VITE_LOCAL_MANAGEMENT_BYPASS=false`，并使用具有 `employee:read` 和所需写权限的账号。
 
 验证命令：
 

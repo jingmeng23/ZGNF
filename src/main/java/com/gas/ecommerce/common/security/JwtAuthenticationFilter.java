@@ -32,7 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             testIdentity.ensureUser();
             var authorities = java.util.stream.Stream.of("ROLE_ADMIN", "ROLE_USER", "TEST_LOGIN_BYPASS")
                     .map(SimpleGrantedAuthority::new).toList();
-            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(TestIdentityService.USER_ID, null, authorities));
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(TestIdentityService.EMPLOYEE_ID, null, authorities));
             chain.doFilter(request, response);
             return;
         }

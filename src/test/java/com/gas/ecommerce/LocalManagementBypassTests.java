@@ -21,7 +21,7 @@ class LocalManagementBypassTests {
             request.setRemoteAddr("192.168.1.20");
             filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {
                 var auth = SecurityContextHolder.getContext().getAuthentication();
-                assertEquals(-1L, auth.getPrincipal());
+                assertEquals(com.gas.ecommerce.common.security.TestIdentityService.EMPLOYEE_ID, auth.getPrincipal());
                 assertTrue(auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("TEST_LOGIN_BYPASS")));
                 assertTrue(auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_USER")));
                 assertTrue(auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")));

@@ -195,18 +195,31 @@ async function submit() {
       requestId: form.requestId,
       remark: form.remark.trim(),
     }
-    if (mode.value === 'create')
-      await inventoryApi.create({
+    let createdInventoryId: string | null = null
+    if (mode.value === 'create') {
+      const created = await inventoryApi.create({
         ...input,
         productId: form.productId.trim(),
         storeId: form.storeId.trim() || null,
       })
-    else if (mode.value === 'inbound') await inventoryApi.inbound(selected.value!.id, input)
+      createdInventoryId = created.inventoryId
+    } else if (mode.value === 'inbound') await inventoryApi.inbound(selected.value!.id, input)
     else if (mode.value === 'outbound') await inventoryApi.outbound(selected.value!.id, input)
     else await inventoryApi.adjust(selected.value!.id, input)
     mode.value = null
-    notice.value = '库存变更已保存，流水已记录'
+    if (createdInventoryId) {
+      query.keyword = ''
+      query.headquarters = ''
+      query.availableMax = ''
+      query.page = 1
+      tab.value = 'stock'
+      notice.value = `库存档案 #${createdInventoryId} 已创建，初始流水已记录`
+    } else notice.value = '库存变更已保存，流水已记录'
     await Promise.all([loadStock(), loadLogs()])
+    if (createdInventoryId) {
+      const createdRow = rows.value.find((row) => row.id === createdInventoryId)
+      if (createdRow) showLogs(createdRow)
+    }
   } catch (e) {
     actionError.value = explain(e)
   } finally {

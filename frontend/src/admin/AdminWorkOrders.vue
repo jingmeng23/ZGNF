@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { adminWorkOrdersApi, workOrderStatuses, workOrderTypes, type WorkOrderRecord, type WorkOrderOptions } from '../api/workOrders'
 const rows=ref<WorkOrderRecord[]>([]), selected=ref<WorkOrderRecord|null>(null), options=ref<WorkOrderOptions>({stores:[],employees:[]}), error=ref(''), busy=ref(false), mine=ref(false)
 const profile=ref<any>(null), q=reactive<any>({page:1,size:10,keyword:'',status:'',type:'',overdue:''})
-const can=(p:string)=>profile.value?.permissions?.includes(p)||import.meta.env.VITE_LOGIN_DISABLED!=='false'
+const can=(p:string)=>profile.value?.permissions?.includes(p) ?? false
 async function load(){try{const r=await adminWorkOrdersApi.list(q,mine.value); rows.value=r.list}catch(e){error.value=e instanceof Error?e.message:'加载失败'}}
 async function act(kind:string,row:WorkOrderRecord){const remark=window.prompt(kind==='assign'?'派单说明':'处理说明');if(!remark)return;busy.value=true;try{if(kind==='assign'){const emp=options.value.employees.find(e=>e.storeId===row.storeId)||options.value.employees[0];if(!emp)throw new Error('暂无可派单员工');selected.value=await adminWorkOrdersApi.assign(row.id,{storeId:emp.storeId,employeeId:emp.id,remark})}else if(kind==='start')selected.value=await adminWorkOrdersApi.start(row.id,remark);else selected.value=await adminWorkOrdersApi.complete(row.id,remark);await load()}catch(e){error.value=e instanceof Error?e.message:'操作失败'}finally{busy.value=false}}
 onMounted(async()=>{try{profile.value=await adminWorkOrdersApi.profile();if(can('workorder:assign'))options.value=await adminWorkOrdersApi.options();mine.value=!can('workorder:read')&&can('workorder:process');await load()}catch(e){error.value=e instanceof Error?e.message:'加载失败'}})

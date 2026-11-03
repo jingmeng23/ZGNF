@@ -54,6 +54,7 @@ const sections = [
     links: [
       { path: '/admin/stores', label: '门店管理', icon: Store },
       { path: '/admin/employees', label: '员工管理', icon: Users },
+      { path: '/admin/users', label: '用户管理', icon: Users },
       { path: '/admin/roles', label: '角色权限', icon: ShieldCheck },
       { path: '/admin/logs', label: '操作日志', icon: ScrollText },
       { path: '/admin/config', label: '系统配置', icon: Settings2 },

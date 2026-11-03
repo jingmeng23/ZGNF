@@ -10,6 +10,7 @@ export const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
   routes: [
     { path: '/admin/employees', component: () => import('../admin/AdminEmployees.vue'), meta: { title: '员工管理' } },
+    { path: '/admin/users', component: () => import('../admin/AdminUsers.vue'), meta: { title: '用户管理' } },
     { path: '/admin/roles', component: () => import('../admin/AdminRoles.vue'), meta: { title: '角色权限' } },
     {
       path: '/aftersales',
@@ -123,6 +124,11 @@ export const router = createRouter({
       meta: { title: '手机登录' },
     },
     {
+      path: '/register',
+      component: () => import('../views/RegisterView.vue'),
+      meta: { title: '用户注册' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       component: () => import('../views/NotFoundView.vue'),
       meta: { title: '页面未找到' },
@@ -132,14 +138,9 @@ export const router = createRouter({
 router.beforeEach((to) => {
   if (loginDisabled && to.path === '/admin/login') return '/admin'
   if (loginDisabled && to.path === '/login') return '/account'
-  const localManagementBypass =
-    import.meta.env.DEV &&
-    import.meta.env.VITE_LOCAL_MANAGEMENT_BYPASS !== 'false' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) &&
-    (to.path === '/admin/employees' || ['employees', 'roles'].includes(String(to.params.module)))
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (to.params.module && !Object.hasOwn(modules, String(to.params.module))) return '/admin'
-    if (!loginDisabled && !localManagementBypass && !adminDemoMode && !hasAdminAccess())
+    if (!loginDisabled && !adminDemoMode && !hasAdminAccess())
       return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
   if (to.meta.requiresAuth && !session.read())

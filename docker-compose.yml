@@ -36,6 +36,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["127.0.0.1:9200:9200"]
+    volumes: ["elasticsearch_data:/usr/share/elasticsearch/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
   gas-server:
     build: .
     ports: ["8080:8080"]
@@ -50,10 +63,14 @@ services:
       RABBITMQ_PASSWORD: gas_rabbit_password
       JWT_SECRET: local-compose-secret-key-change-before-deploy-2026
       ENCRYPTION_KEY: local-compose-phone-encryption-key-2026
+      MALL_ES_URL: http://elasticsearch:9200
+      MALL_ES_SYNC_ENABLED: "true"
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}
+      elasticsearch: {condition: service_healthy}
 volumes:
   mysql_data:
   redis_data:
+  elasticsearch_data:

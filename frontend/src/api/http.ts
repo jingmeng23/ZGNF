@@ -32,9 +32,13 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       /* Handle gateway HTML and empty responses below. */
     }
     if (response.status === 401) {
-      session.clear()
-      window.dispatchEvent(new Event('auth:expired'))
-      throw new ApiError('登录已过期，请重新登录', 401001, body?.traceId)
+      const isAuthEndpoint = /^\/auth\//.test(path) || /^\/users\/(register|login\/password)$/.test(path)
+      if (!isAuthEndpoint && current) {
+        session.clear()
+        window.dispatchEvent(new Event('auth:expired'))
+        throw new ApiError('登录已过期，请重新登录', 401001, body?.traceId)
+      }
+      throw new ApiError(body?.message || '手机号或密码错误', body?.code || 401001, body?.traceId)
     }
     if (!response.ok || body?.code !== 200) {
       const fallback =

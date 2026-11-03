@@ -1,36 +1,12 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Flame, ArrowLeft } from 'lucide-vue-next'
-import { authApi } from '../api/auth'
 import { useAuthStore } from '../stores/auth'
 import { ApiError } from '../api/http'
-const phone = ref(''), code = ref(''), message = ref(''), error = ref('')
-const sending = ref(false), submitting = ref(false), remaining = ref(0)
-const validPhone = computed(() => /^1[3-9]\d{9}$/.test(phone.value))
-const auth = useAuthStore(), route = useRoute(), router = useRouter()
-let timer: ReturnType<typeof setInterval> | undefined
-function showError(e: unknown) { error.value = e instanceof ApiError && e.traceId ? `${e.message}（请求编号：${e.traceId}）` : (e as Error).message }
-async function sendCode() {
-  if (!validPhone.value || sending.value || remaining.value) return
-  sending.value = true; error.value = ''; message.value = ''
-  try {
-    await authApi.sendCode(phone.value)
-    message.value = '验证码发送任务已提交，请留意短信。'
-    remaining.value = 60
-    timer = setInterval(() => { if (--remaining.value <= 0) clearInterval(timer) }, 1000)
-  } catch (e) { showError(e) } finally { sending.value = false }
-}
-async function login() {
-  if (submitting.value) return
-  if (!validPhone.value || !/^\d{6}$/.test(code.value)) { error.value = '请输入有效的手机号和 6 位验证码'; return }
-  submitting.value = true; error.value = ''
-  try {
-    await auth.login(phone.value, code.value)
-    const target = typeof route.query.redirect === 'string' ? route.query.redirect : '/account'
-    await router.replace(target.startsWith('/') && !target.startsWith('//') ? target : '/account')
-  } catch (e) { showError(e) } finally { submitting.value = false }
-}
-onUnmounted(() => clearInterval(timer))
+const route=useRoute(),router=useRouter(),auth=useAuthStore()
+const phone=ref(typeof route.query.phone==='string'?route.query.phone:''),password=ref(''),error=ref(''),submitting=ref(false)
+const validPhone=computed(()=>/^1[3-9]\d{9}$/.test(phone.value))
+async function submit(){error.value='';if(!validPhone.value){error.value='请输入有效的11位手机号';return}if(!password.value){error.value='请输入密码';return}submitting.value=true;try{await auth.login(phone.value,password.value);const target=typeof route.query.redirect==='string'?route.query.redirect:'/account';await router.replace(target.startsWith('/')&&!target.startsWith('//')?target:'/account')}catch(e){error.value=e instanceof ApiError?e.message:(e as Error).message}finally{submitting.value=false}}
 </script>
-<template><RouterLink to="/account" class="back-link"><ArrowLeft :size="17" /> 返回个人中心</RouterLink><section class="login-panel"><span class="brand-mark"><Flame :size="28" /></span><span class="eyebrow">WELCOME HOME</span><h1>欢迎回家</h1><p>手机验证码登录，首次登录自动注册。</p><form @submit.prevent="login"><label for="phone">手机号码</label><input id="phone" v-model="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="11" placeholder="请输入手机号码" required pattern="1[3-9][0-9]{9}" /><label for="code">短信验证码</label><div class="code-field"><input id="code" v-model="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码" required pattern="[0-9]{6}" /><button type="button" :disabled="!validPhone || sending || remaining > 0" @click="sendCode">{{ remaining ? `${remaining}s 后重试` : sending ? '提交中…' : '获取验证码' }}</button></div><p v-if="message" class="success-message" role="status">{{ message }}</p><p v-if="error" class="error-message" role="alert">{{ error }}</p><button class="button full-width" :disabled="submitting" type="submit">{{ submitting ? '正在登录…' : '登录 / 注册' }}</button></form><small class="login-note">验证码由短信服务发送，请勿向他人泄露。</small></section></template>
+<template><RouterLink to="/account" class="back-link"><ArrowLeft :size="17"/> 返回个人中心</RouterLink><section class="login-panel"><span class="brand-mark"><Flame :size="28"/></span><span class="eyebrow">WELCOME HOME</span><h1>用户登录</h1><p>使用已注册的手机号和密码登录。</p><p v-if="route.query.registered === '1'" class="success-message" role="status">注册成功，请使用刚设置的手机号和密码登录。</p><form @submit.prevent="submit"><label for="phone">手机号</label><input id="phone" v-model="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="11" placeholder="请输入手机号" required/><label for="password">密码</label><input id="password" v-model="password" type="password" autocomplete="current-password" maxlength="64" placeholder="请输入密码" required/><p v-if="error" class="error-message" role="alert">{{error}}</p><button class="button full-width" :disabled="submitting" type="submit">{{submitting?'登录中…':'登录'}}</button></form><RouterLink class="text-action" :to="{path:'/register',query:route.query.redirect?{redirect:route.query.redirect}:{}}">还没有账号？立即注册</RouterLink></section></template>

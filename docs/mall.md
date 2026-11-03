@@ -68,7 +68,7 @@ SKU 数据不接入现有仅支持 SPU 的购物车流程，本次不扩展购�
 开启 `MALL_ES_SYNC_ENABLED=true` 后，每 `MALL_ES_SYNC_MS` 毫秒同步一次，默认 300000；首次定时同步同样等待该间隔。
 首次启动或商品批量更新后，可用具有 `product:write` 权限的管理员调用 `POST /api/v1/admin/mall/search/reindex` 立即同步。
 该接口创建版本索引、批量写入、refresh 后原子切换别名，失败保留旧索引，成功后清理原别名所属的旧版本。
-本地可以使用 `docker compose -f docker-compose.yml -f docker-compose.search.yml up -d` 启动包含 ES 的环境。
+本地可以使用 `docker compose up -d` 启动完整环境，主配置 `docker-compose.yml` 已包含 Elasticsearch，并开启后端商品索引定时同步。
 ES 使用内置 standard 分词器，无需安装插件；后续若需要词典、拼音、同义词可在商品搜索源进一步配置。
 
 ES 只用于文本召回与相关度。筛选、价格/销量/新品排序、总数和分页交由商品中心的实时数据读取，避免索引中价格和库存滞后造成错误展示。

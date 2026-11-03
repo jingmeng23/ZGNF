@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     server: {
       port: 5173,
-      proxy: { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://localhost:8080', changeOrigin: true } },
+      proxy: { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://localhost:8081', changeOrigin: true } },
     },
     test: { environment: 'node' },
   }

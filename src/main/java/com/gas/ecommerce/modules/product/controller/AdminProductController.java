@@ -8,8 +8,6 @@ import com.gas.ecommerce.modules.product.dto.*;
 import com.gas.ecommerce.modules.product.vo.AdminProductVO;
 import com.gas.ecommerce.modules.product.service.CatalogManagementService;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;

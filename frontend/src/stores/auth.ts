@@ -9,12 +9,12 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(session.read()?.token || '')
   const user = ref<CurrentUser | null>(loginDisabled ? { userId: '-1' } : null)
   const authenticated = computed(() => loginDisabled || (!!token.value && !!session.read()))
-  async function login(phone: string, code: string) {
-    const result = await authApi.login(phone, code)
+  async function applyLogin(result: { accessToken: string; expiresIn: number }) {
     session.write(result.accessToken, result.expiresIn)
     token.value = result.accessToken
     user.value = await authApi.me()
   }
+  async function login(phone: string, password: string) { await applyLogin(await authApi.login(phone, password)) }
   function logout() { session.clear(); token.value = ''; user.value = null }
-  return { token, user, authenticated, login, logout }
+  return { token, user, authenticated, login, applyLogin, logout }
 })

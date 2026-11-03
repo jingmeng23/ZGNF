@@ -14,5 +14,5 @@ import org.springframework.web.bind.annotation.RestController;
  */
 public class UserController {
     /** 用户 ID 来自 JWT 过滤器放入 Spring Security 的当前登录上下文。 */
-    @GetMapping("/me") public Result<Map<String, Object>> me() { return Result.success(Map.of("userId", SecurityUtils.currentUserId())); }
+    // The profile endpoint is provided by UserManagementController.
 }

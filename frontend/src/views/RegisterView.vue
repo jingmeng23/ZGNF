@@ -1,0 +1,12 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Flame, ArrowLeft } from 'lucide-vue-next'
+import { authApi } from '../api/auth'
+import { ApiError } from '../api/http'
+const route=useRoute(),router=useRouter()
+const phone=ref(''),nickname=ref(''),password=ref(''),confirmPassword=ref(''),error=ref(''),submitting=ref(false)
+const validPhone=computed(()=>/^1[3-9]\d{9}$/.test(phone.value)),validPassword=computed(()=>/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,64}$/.test(password.value))
+async function submit(){error.value='';if(!validPhone.value){error.value='请输入有效的11位手机号';return}if(!validPassword.value){error.value='密码需为8至64位，并包含大小写字母和数字';return}if(password.value!==confirmPassword.value){error.value='两次输入的密码不一致';return}submitting.value=true;try{await authApi.register(phone.value,password.value,nickname.value.trim()||undefined);await router.replace({path:'/login',query:{phone:phone.value,...(typeof route.query.redirect==='string'?{redirect:route.query.redirect}:{registered:'1'})}})}catch(e){error.value=e instanceof ApiError?e.message:(e as Error).message}finally{submitting.value=false}}
+</script>
+<template><RouterLink to="/account" class="back-link"><ArrowLeft :size="17"/> 返回个人中心</RouterLink><section class="login-panel"><span class="brand-mark"><Flame :size="28"/></span><span class="eyebrow">WELCOME HOME</span><h1>创建账号</h1><p>注册完成后，请使用手机号和密码登录。</p><form @submit.prevent="submit"><label for="phone">手机号</label><input id="phone" v-model="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="11" placeholder="请输入手机号" required/><label for="nickname">昵称（选填）</label><input id="nickname" v-model="nickname" maxlength="64" autocomplete="nickname" placeholder="设置一个昵称"/><label for="password">密码</label><input id="password" v-model="password" type="password" autocomplete="new-password" maxlength="64" placeholder="8至64位，含大小写字母和数字" required/><label for="confirm-password">确认密码</label><input id="confirm-password" v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="64" placeholder="再次输入密码" required/><p v-if="error" class="error-message" role="alert">{{error}}</p><button class="button full-width" :disabled="submitting" type="submit">{{submitting?'注册中…':'注册'}}</button></form><RouterLink class="text-action" :to="{path:'/login',query:route.query.redirect?{redirect:route.query.redirect}:{}}">已有账号？前往登录</RouterLink></section></template>

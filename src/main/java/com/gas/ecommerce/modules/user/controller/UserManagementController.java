@@ -17,7 +17,10 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/v1/users")
 public class UserManagementController {
-    private final JdbcTemplate db; private final PasswordEncoder passwords; private final JwtTokenProvider tokens; private final String key;
+    private final JdbcTemplate db;
+    private final PasswordEncoder passwords; 
+    private final JwtTokenProvider tokens; 
+    private final String key;
     public UserManagementController(JdbcTemplate db, PasswordEncoder passwords, JwtTokenProvider tokens, @org.springframework.beans.factory.annotation.Value("${app.encryption-key}") String key) { this.db=db;this.passwords=passwords;this.tokens=tokens;this.key=key; }
     @PostMapping("/register") @Transactional public Result<RegistrationVO> register(@Valid @RequestBody RegisterRequest r) {
         if (!strong(r.password())) throw new BusinessException("密码需为8至64位，并包含大小写字母和数字");

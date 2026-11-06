@@ -1,42 +1,91 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { project, unproject } from '../platform/addressMap'
-const props = defineProps<{ latitude?: number | null; longitude?: number | null }>()
-const emit = defineEmits<{ select: [point: { latitude: number; longitude: number }] }>()
-const latitude = ref(props.latitude ?? 35), longitude = ref(props.longitude ?? 105), zoom = ref(props.latitude != null ? 15 : 4)
-const error = ref(''), locating = ref(false), tileError = ref(false)
-const center = computed(() => project(latitude.value, longitude.value, zoom.value))
-const tiles = computed(() => {
-  const list = [], count = 2 ** zoom.value
-  for (let row = -1; row <= 1; row++) for (let col = -1; col <= 1; col++) {
-    const x = Math.floor(center.value.x / 256) + col, y = Math.floor(center.value.y / 256) + row
-    if (y >= 0 && y < count) list.push({ key: `${zoom.value}-${x}-${y}`, url: `https://tile.openstreetmap.org/${zoom.value}/${((x % count) + count) % count}/${y}.png`, left: x * 256 - center.value.x + 256, top: y * 256 - center.value.y + 160 })
-  }
-  return list
-})
-function pick(event: MouseEvent) {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const point = unproject(center.value.x + event.clientX - rect.left - rect.width / 2, center.value.y + event.clientY - rect.top - 160, zoom.value)
-  latitude.value = point.latitude; longitude.value = point.longitude
+import { onBeforeUnmount, ref } from 'vue'
+import AMapLoader from '@amap/amap-jsapi-loader'
+import { municipalityCity } from '../platform/addressAssist'
+const props = defineProps<{ latitude?: number | null; longitude?: number | null; coordinateSystem?: string }>()
+export interface MapSelection { latitude: number; longitude: number; detail: string; adcode: string; province: string; city: string; district: string }
+const emit = defineEmits<{ select: [value: MapSelection] }>()
+const container = ref<HTMLDivElement>(), error = ref(''), locating = ref(false)
+let sdk: any, map: any, marker: any, geocoder: any
+let generation = 0, request = 0
+const defaultCenter = [104.7784, 29.3392]
+function destroy() { generation++; request++; map?.destroy(); map = marker = geocoder = sdk = undefined; locating.value = false }
+async function initialize() {
+  destroy(); error.value = ''; const current = generation
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  try {
+    if (!import.meta.env.VITE_AMAP_KEY?.trim()) {
+      error.value = '地图未配置，请联系管理员；仍可手动填写并保存地址。'
+      return
+    }
+    ;(window as any)._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE }
+    const loaded = await Promise.race([AMapLoader.load({ key: import.meta.env.VITE_AMAP_KEY.trim(), version: '2.0', plugins: ['AMap.Geocoder'] }), new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('地图加载超时')), 12000) })])
+    if (current !== generation || !container.value) return
+    sdk = loaded
+    const existing = props.longitude != null && props.latitude != null
+    let center = existing ? [props.longitude, props.latitude] : defaultCenter
+    if (existing && props.coordinateSystem === 'WGS84') {
+      center = await new Promise<any>((resolve, reject) => sdk.convertFrom(center, 'gps', (status: string, result: any) => status === 'complete' ? resolve(result.locations[0]) : reject(new Error('坐标转换失败'))))
+      if (current !== generation) return
+    }
+    map = new sdk.Map(container.value, { zoom: existing ? 16 : 12, center })
+    geocoder = new sdk.Geocoder()
+    marker = new sdk.Marker({ position: center, draggable: true, map })
+    map.on('click', (event: any) => pick(event.lnglat))
+    marker.on('dragend', (event: any) => pick(event.lnglat))
+    map.resize()
+  } catch { if (current === generation) error.value = '地图加载失败，请手动填写地址，仍可正常保存。' }
+  finally { if (timeout) clearTimeout(timeout) }
 }
-function pan(x: number, y: number) { const point = unproject(center.value.x + x, center.value.y + y, zoom.value); latitude.value = point.latitude; longitude.value = point.longitude }
+function pick(point: any) {
+  if (!map) return
+  const token = ++request, current = generation
+  const longitude = point.getLng(), latitude = point.getLat()
+  marker.setPosition([longitude, latitude])
+  geocoder.getAddress([longitude, latitude], (status: string, result: any) => {
+    if (current !== generation || token !== request) return
+    if (status !== 'complete' || !result.regeocode) { error.value = '地址识别失败，请重试或手动填写。'; return }
+    error.value = ''
+    const a = result.regeocode, c = a.addressComponent
+    emit('select', { longitude, latitude, detail: a.formattedAddress, adcode: c.adcode, province: c.province, city: municipalityCity(c), district: c.district })
+  })
+}
+function flyTo(city: string) {
+  if (!map || !city) return
+  const token = ++request, current = generation
+  geocoder.getLocation(city, (status: string, result: any) => {
+    if (current !== generation || token !== request) return
+    if (status === 'complete' && result.geocodes?.length) {
+      const point = result.geocodes[0].location
+      map.setZoomAndCenter(12, point, false, 600); marker.setPosition(point)
+    } else error.value = '城市定位失败，可手动选择地图位置。'
+  })
+}
 function locate() {
-  error.value = ''
-  if (!navigator.geolocation) { error.value = '当前环境不支持定位，请手动选点'; return }
-  locating.value = true
-  navigator.geolocation.getCurrentPosition(position => { latitude.value = position.coords.latitude; longitude.value = position.coords.longitude; zoom.value = 16; locating.value = false }, () => { error.value = '未取得定位授权或定位失败，请手动选点'; locating.value = false }, { timeout: 10000, maximumAge: 0, enableHighAccuracy: false })
+  if (!map) return
+  if (!navigator.geolocation) { error.value = '浏览器不支持定位，可在默认城市手动选点。'; return }
+  const current = generation; locating.value = true
+  navigator.geolocation.getCurrentPosition(position => {
+    if (current !== generation || !map) return
+    locating.value = false
+    sdk.convertFrom([position.coords.longitude, position.coords.latitude], 'gps', (status: string, result: any) => {
+      if (current !== generation || !map) return
+      if (status === 'complete') { map.setZoomAndCenter(16, result.locations[0]); pick(result.locations[0]) }
+      else error.value = '定位转换失败，请手动选点。'
+    })
+  }, () => {
+    if (current !== generation || !map) return
+    locating.value = false; error.value = '未获得定位授权或定位失败，可在默认城市手动选点。'
+  }, { timeout: 10000, maximumAge: 0 })
 }
+defineExpose({ initialize, destroy, flyTo })
+onBeforeUnmount(destroy)
 </script>
 <template>
-  <section class="address-map">
-    <p>点击地图选点。定位仅在点击下方按钮并获得浏览器授权后进行。</p>
-    <div class="map-controls"><button type="button" @click="locate" :disabled="locating">{{ locating ? '定位中…' : '授权获取当前位置' }}</button><button type="button" @click="zoom = Math.min(18, zoom + 1)">放大</button><button type="button" @click="zoom = Math.max(2, zoom - 1)">缩小</button><button type="button" @click="pan(-180, 0)">西</button><button type="button" @click="pan(180, 0)">东</button><button type="button" @click="pan(0, -120)">北</button><button type="button" @click="pan(0, 120)">南</button></div>
-    <div class="map-viewport" @click="pick" aria-label="收货地址选点地图"><div class="map-canvas"><img v-for="tile in tiles" :key="tile.key" :src="tile.url" :style="{ left: `${tile.left}px`, top: `${tile.top}px` }" alt="" draggable="false" @error="tileError = true" /><span class="map-pin">📍</span></div></div>
-    <small>地图数据 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a> · 坐标 WGS84</small>
-    <p v-if="tileError" role="status">地图加载失败，可重试或返回手动填写地址。</p><p v-if="error" role="status">{{ error }}</p>
-    <p>纬度 {{ latitude.toFixed(7) }}，经度 {{ longitude.toFixed(7) }}</p><button type="button" @click="emit('select', { latitude: Number(latitude.toFixed(7)), longitude: Number(longitude.toFixed(7)) })">确认使用此坐标</button>
+  <section><div ref="container" class="map" aria-label="点击地图或拖动标记选择收货地址" />
+    <p v-if="error" role="status">{{ error }}</p>
+    <button type="button" :disabled="locating" @click="locate">{{ locating ? '定位中…' : '定位到我的位置' }}</button>
+    <small>点击地图或拖动标记自动填写地址；定位需浏览器授权。</small>
   </section>
 </template>
-<style scoped>
-.map-controls { display:flex; flex-wrap:wrap; gap:.4rem; margin: .7rem 0 }.map-viewport { height:320px; width:100%; max-width:512px; overflow:hidden; position:relative; background:#e7eddf; cursor:crosshair }.map-canvas { position:relative; width:512px; height:320px; left:50%; transform:translateX(-50%) }.map-canvas img { position:absolute; width:256px; height:256px; max-width:none }.map-pin { position:absolute; left:256px; top:160px; transform:translate(-50%,-100%); pointer-events:none; font-size:30px }.address-map small { display:block }
-</style>
+<style scoped>.map { height:300px; width:100%; background:#edf2ec; border-radius:8px }p { color:#a75317 }small { display:block; margin-top:8px; color:#666 }</style>

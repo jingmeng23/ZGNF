@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.26__address_coordinate_system.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -1923,6 +1923,31 @@ class AdminCatalogIntegrationTests {
     private com.fasterxml.jackson.databind.node.ObjectNode assistedAddress() throws Exception {
         var body=(com.fasterxml.jackson.databind.node.ObjectNode)json.readTree(addressBody("13800138000",true));
         body.put("label","\u5bb6").put("provinceCode","510000").put("cityCode","510300").put("districtCode","510302").put("latitude",29.34).put("longitude",104.78).put("allowDuplicate",false);return body;
+    }
+    @Test void addressDialogContractAllowsMissingMapAndValidatesLengths() throws Exception {
+        addressRegions(); var body=assistedAddress();
+        body.remove("label"); body.remove("allowDuplicate");
+        body.putNull("latitude").putNull("longitude").put("adcode","510302").put("fullAddress","四川省自贡市自流井区汇东路 1 号");
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.adcode").value("510302"))
+                .andExpect(jsonPath("$.data.fullAddress").value("四川省自贡市自流井区汇东路 1 号"));
+        mvc.perform(post("/api/v1/users/me/addresses?allowDuplicate=true").header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isOk());
+        body.put("receiver","张");
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isBadRequest());
+        body.put("receiver","张三").put("detail","1号");
+        mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isBadRequest());
+    }
+    @Test void addressMapCoordinatesRetainTheirSystemWhenEditingLegacyAddresses() throws Exception {
+        addressRegions(); var body=assistedAddress();
+        var response=mvc.perform(post("/api/v1/users/me/addresses").header("Authorization",userBearer).contentType("application/json").content(body.toString())).andExpect(status().isOk()).andReturn();
+        long id=json.readTree(response.getResponse().getContentAsString()).at("/data/id").asLong();
+        body.put("fullAddress","四川省自贡市自流井区汇东路 1 号").put("adcode","510302");
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.coordinateSystem").value("WGS84"));
+        body.put("latitude",29.35);
+        mvc.perform(put("/api/v1/users/me/addresses/"+id).header("Authorization",userBearer).contentType("application/json").content(body.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.coordinateSystem").value("GCJ-02"));
     }
     @Test void addressAssistanceReturnsDraftsWithoutPersistenceAndEnforcesRoles() throws Exception {
         addressRegions();

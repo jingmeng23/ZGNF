@@ -18,6 +18,14 @@ class AddressAssistanceTests {
         regions.importRegions(List.of(new AddressRegionService.Region("510000",null,"四川省",1,true,null,"v1"),new AddressRegionService.Region("510300","510000","自贡市",2,true,null,"v1"),new AddressRegionService.Region("510302","510300","自流井区",3,true,null,"v1")));
         parser=new AddressTextParser(regions);
     }
+    @Test void streetsCanBeImportedAndLoadedOnlyUnderTheirDistrict() {
+        regions.importRegions(List.of(new AddressRegionService.Region("510302001","510302","五星街街道",4,true,null,"v1")));
+        assertEquals("510302001", regions.children("510302").getFirst().code());
+        assertEquals(4, regions.children("510302").getFirst().level());
+        assertTrue(regions.children("510302001").isEmpty());
+        assertThrows(BusinessException.class, () -> regions.importRegions(List.of(new AddressRegionService.Region("510302002","510300","错误街道",4,true,null,"v1"))));
+        assertTrue(regions.validate(address()).valid());
+    }
     @Test void parsedFieldsAreAlwaysSuggestionsAndNeverSaved() {
         var draft=parser.parse("张三，13800138000，四川省自贡市自流井区汇东路1号");
         assertEquals("张三",draft.receiver());assertEquals("13800138000",draft.phone());assertEquals("510302",draft.districtCode());assertEquals("汇东路1号",draft.detail());assertTrue(draft.needsConfirmation());

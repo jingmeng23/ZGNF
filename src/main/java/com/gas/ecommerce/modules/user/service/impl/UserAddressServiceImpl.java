@@ -93,6 +93,8 @@ public class UserAddressServiceImpl extends ServiceImpl<UserAddressMapper, UserA
     }
 
     private void apply(UserAddress address, AddressRequest request) {
+        if (request.receiver().trim().length()<2 || request.receiver().trim().length()>20 || request.detail().trim().length()<5)
+            throw new BusinessException("收件人须为2至20字，详细地址不少于5字");
         address.setReceiver(request.receiver().trim());
         address.setPhone(EncryptUtils.encryptAes(request.phone(), encryptionKey));
         address.setPhoneLast4(request.phone().substring(7));
@@ -102,6 +104,10 @@ public class UserAddressServiceImpl extends ServiceImpl<UserAddressMapper, UserA
         address.setDetail(request.detail().trim());
         address.setLabel(request.label()==null || request.label().isBlank()?null:request.label().trim());
         address.setProvinceCode(request.provinceCode());address.setCityCode(request.cityCode());address.setDistrictCode(request.districtCode());
+        address.setAdcode(request.adcode()!=null ? request.adcode() : request.districtCode());
+        boolean samePoint = address.getLatitude()!=null && address.getLongitude()!=null && request.latitude()!=null && request.longitude()!=null
+                && address.getLatitude().compareTo(request.latitude())==0 && address.getLongitude().compareTo(request.longitude())==0;
+        if (!samePoint) address.setCoordinateSystem(request.fullAddress() != null ? "GCJ-02" : "WGS84");
         address.setLatitude(request.latitude());address.setLongitude(request.longitude());
         if(request.provinceCode()!=null) regions.requireValid(address);
     }
@@ -111,14 +117,14 @@ public class UserAddressServiceImpl extends ServiceImpl<UserAddressMapper, UserA
         return new UserAddressVO(address.getId(), address.getReceiver(),
                 EncryptUtils.decryptAes(address.getPhone(), encryptionKey), address.getProvince(),
                 address.getCity(), address.getDistrict(), address.getDetail(), Boolean.TRUE.equals(address.getIsDefault()),
-                address.getLabel(),address.getProvinceCode(),address.getCityCode(),address.getDistrictCode(),address.getLatitude(),address.getLongitude(),"WGS84",
-                !region.valid(),region.message(),region.suggestedDistrictCode());
+                address.getLabel(),address.getProvinceCode(),address.getCityCode(),address.getDistrictCode(),address.getLatitude(),address.getLongitude(),address.getCoordinateSystem()==null?"WGS84":address.getCoordinateSystem(),
+                !region.valid(),region.message(),region.suggestedDistrictCode(),address.getAdcode());
     }
 
     private void clearNullableFields(UserAddress a) {
         update(null,Wrappers.<UserAddress>lambdaUpdate().eq(UserAddress::getId,a.getId()).eq(UserAddress::getUserId,a.getUserId())
                 .set(UserAddress::getLabel,a.getLabel()).set(UserAddress::getProvinceCode,a.getProvinceCode()).set(UserAddress::getCityCode,a.getCityCode())
-                .set(UserAddress::getDistrictCode,a.getDistrictCode()).set(UserAddress::getLatitude,a.getLatitude()).set(UserAddress::getLongitude,a.getLongitude()));
+                .set(UserAddress::getDistrictCode,a.getDistrictCode()).set(UserAddress::getLatitude,a.getLatitude()).set(UserAddress::getLongitude,a.getLongitude()).set(UserAddress::getAdcode,a.getAdcode()));
     }
     private static String normalized(String text) {
         return java.text.Normalizer.normalize(text,java.text.Normalizer.Form.NFKC).replaceAll("[\\s\\p{Punct}\u3000\uFF0C\u3002]", "").toLowerCase(java.util.Locale.ROOT);

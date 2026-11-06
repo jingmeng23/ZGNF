@@ -1,42 +1,55 @@
-# 收货地址辅助能力
+# 收货地址模块
 
-地址模块仅管理收货人、电话、地区、详细地址、标签和坐标。配送服务负责可达性和运费；订单落库保存本次交易的地址快照。编辑或删除地址簿不会修改已有订单，已支付订单变更收货地址必须走独立订单流程。
+页面 `/addresses` 使用 Element Plus 弹窗和四列地区面板，支持新增、编辑、删除、默认地址、粘贴识别和高德地图选点。
 
-## 用户接口
+## 四级地区面板
 
-地址管理页面为 `/addresses`，接口前缀为 `/api/v1/users/me/addresses`，均要求用户身份，并按当前用户隔离数据。
+`RegionSelector.vue` 支持 `v-model` 绑定字符串或数字编码数组，如 `[510000, 510300, 510303, 510303002]`（四川省 / 自贡市 / 贡井区 / 贡井街道）。默认通过地区接口逐级加载，也可通过 `loadRegions(parentCode)` 传入异步加载函数。`change(values, regions)` 在手动选择时返回当前路径及地区记录；外部赋值仅回显，不触发 change。
 
-- `POST /parse`：提交 `{ "text": "粘贴的收货信息" }`，返回姓名、电话、地区和详细地址草稿。解析在本地执行，不上传第三方；歧义字段留空并提示。页面要求用户确认后才能应用草稿，接口本身不保存地址。
-- `GET /regions`：获取有效省份；传 `parentCode` 获取下级地区。
-- `POST /reverse-geocode`：提交 `latitude`、`longitude`、`consent: true`，返回待确认草稿。
-- 原地址新增/修改接口支持 `label`（最多 20 字）、三级地区编码、成对经纬度和 `allowDuplicate`。
+面板横向分省份、城市、区县、街道四列，支持关闭按钮、点击外部和 Esc 关闭、加载失败重试及异步竞态保护。切换上级立即清除下级；初始仅加载省份。区划导入接口已允许 level=4，街道 parentCode 必须指向 level=3 的区县。包内未覆盖的地区显示“暂无地区数据”。
 
-标签支持家、公司、学校和自定义值。同一用户的省市区与详细地址经规范化后相同，默认返回 HTTP 409、业务码 `409002`。用户明确选择仍然保存后，以 `allowDuplicate: true` 重试；不同用户之间不进行重复提示，也不泄露地址。
+收货地址表单已接入该组件。为兼容固定保存字段，街道名称并入 detail，编辑、粘贴识别、地图选点时从所属区县的街道列表匹配最长名称进行四级回显；省市区仍独立保存，旧三级地址可继续编辑保存。
 
-## 地图与定位
+### province-city-china 数据接入
 
-用户明确打开地图后才加载 OpenStreetMap 地图瓦片；点击定位按钮才请求浏览器位置授权。浏览器定位通常要求 HTTPS 或 localhost。拒绝授权时仍可手动选点或输入地址。地图选点需再次确认，使用 WGS84 坐标。
+数据来自开发依赖 `province-city-china@9.0.0`（上游项目 https://github.com/uiwjs/province-city-china，MIT）。在 frontend 目录运行 `npm run regions:generate`，生成后端资源 `src/main/resources/regions/province-city-china.json`，随 JAR 打包；重启后端即可使用，不需要导入 SQL 或重启前端构建来下载全国数据。更新依赖后需重新生成资源并测试。
 
-反向地理编码独立征求同意，配置 `ADDRESS_GEOCODING_URL` 为兼容 Nominatim 的服务基础地址后启用。未配置或服务失败时保留手动输入能力。部署时应按地图和地理编码供应商要求配置服务容量、使用政策和隐私说明；生产环境未进行供应商连通性验证。
+资源含 34 个省级地区、342 个市级节点、2,847 个区县、38,930 个唯一街道节点；直辖市补充同名市级节点以维持四级路径。自贡有 6 个区县及 90 个街道/乡镇。上游 town.code 为区县编码，town.town 为街道编码片段，常规街道组合为 9 位编码；有非零尾码时保留完整 12 位编码。上游北泉镇同编码别名重复记录按编码去重，保留第一条名称。
 
-## 行政区划数据与更新
+地区 API、解析服务和保存校验统一使用该资源。数据库已有同编码记录优先，停用地区不会被包内数据重新启用；未配置的编码使用包内默认数据。未写入或覆盖数据库记录，也不使用 frontend/streets.json。
 
-迁移 `V1.20` 创建区划字典及地址扩展字段，不内置未经核验的全国数据。上线前需导入权威行政区划数据，编码为 6–12 位数字。
+## 环境配置
 
-管理员调用 `PUT /api/v1/admin/address-regions`，请求示例：
+- 前端安装依赖后，在 `frontend/.env.local` 填写 `VITE_AMAP_KEY` 和 `VITE_AMAP_SECURITY_CODE`，使用高德 JavaScript API 2.0 凭证并配置域名白名单。`.env.example` 仅供参考，Vite 不会加载；修改环境配置后重启开发服务，生产环境需重新构建。`.env.local` 已被 Git 忽略。
+- 后端启动由 Flyway 执行 `V1.26__address_coordinate_system.sql`。历史坐标保留 WGS84，新地图选点采用 GCJ-02；历史坐标在地图展示时转换，未修改点位时保留原坐标系。
+- 地区默认读取包内数据，可通过 `PUT /api/v1/admin/address-regions` 管理覆盖配置（code、parentCode、name、level、active、replacementCode、version）。后端继续校验三级编码、父子关系、名称和有效状态。
 
-```json
-[
-  {"code":"510000","parentCode":null,"name":"四川省","level":1,"active":true,"replacementCode":null,"version":"2026"},
-  {"code":"510300","parentCode":"510000","name":"自贡市","level":2,"active":true,"replacementCode":null,"version":"2026"},
-  {"code":"510302","parentCode":"510300","name":"自流井区","level":3,"active":true,"replacementCode":null,"version":"2026"}
-]
-```
+## 交互
 
-每次最多导入 10000 条，可分批导入，父级必须已存在或在同批中。导入为更新/新增，遗漏记录不会自动停用；废弃编码应显式设 `active: false`，可通过 `replacementCode` 指向同级有效编码。名称变更也会要求用户重新确认地址。字典更新不会改写历史地址文本或订单快照。
+textarea 监听 paste：图片提示“图片识别功能开发中”并调用空函数 `uploadToOcr(file)`；纯文本调用本地 address-parse，不上传第三方。
 
-旧地址始终可以展示；响应中的 `needsRegionCompletion`、`regionMessage` 和 `suggestedDistrictCode` 用于提示补全。默认 `ADDRESS_REQUIRE_REGION_CODES=true`，结算时必须提供有效且名称匹配的三级编码。渐进迁移可临时关闭该开关以兼容无编码地址，但已有失效编码仍会阻止结算，不能借兼容开关绕过校验。
+解析器兼容 CommonJS 的多层 default 导出；文本先做 NFKC 全角转换，并规范化 +86、手机号中的空格/横线、多行输入和常见字段标签。多个手机号仍按歧义处理，不自动覆盖。地区接口失败与低置信度识别分开提示。
 
-## 验证范围
+识别完整度按姓名、手机号、省、市、区及编码、详细地址六项计算，阈值 0.95，且须匹配后端有效区划。多个手机号、低分或失效地区只提示，不修改已填内容。该评分为应用层完整度规则，并非概率。
 
-测试覆盖解析歧义、失效地区和层级校验、重复保存选择、用户隔离、标签与坐标清空、角色限制，以及修改地址后已支付订单快照不变。地图投影与地址客户端有前端单测；浏览器真实定位授权和供应商服务需在部署环境验收。
+级联选择后地图定位城市中心；点击地图或拖动 Marker 后调用 Geocoder 逆编码，将 formattedAddress 回填详细地址并同步省市区。直辖市 city 为空数组时用 district 兜底，再按 adcode 找到字典父级以兼容“市辖区”。
+
+地图在 dialog opened 后初始化并 resize，关闭或卸载时 destroy，过期异步回调失效。编辑坐标直接定位原位置；新增默认自贡市中心。点击定位按钮才申请浏览器授权，拒绝或超时仍可手动选点。Key 缺失、SDK 超时和网络失败均提示降级，表单可正常提交，经纬度可同时为空。
+
+前后端校验：收件人 2–20 字、手机号 11 位、详细地址不少于 5 字。
+
+## 保存契约
+
+POST `/api/v1/users/me/addresses` 或 PUT `/{id}` 的 JSON 固定字段：
+
+`receiver, phone, provinceCode, cityCode, districtCode, province, city, district, detail, fullAddress, longitude, latitude, adcode, isDefault`
+
+响应 fullAddress 从保存的有效区划与详细地址派生；adcode 独立保存地图行政区编码，手动选择时使用区县编码。重复地址返回 HTTP 409 / 409002，用户点击“仍然保存”时通过查询参数 `allowDuplicate=true` 重试，固定 JSON 不添加字段。旧客户端 body.allowDuplicate 继续兼容。
+
+原有 `/parse`、`/reverse-geocode` 保留兼容；新页面使用 address-parse 和高德 SDK，不需要旧 Nominatim 配置。地址簿修改或删除不改变历史订单。
+
+## 验证
+
+运行前端 `npm run build` 和地址相关 Vitest，后端运行 AddressAssistanceTests 和 AdminCatalogIntegrationTests 的地址用例。
+
+真实地图需在部署域名配置有效 Key 后验收：打开弹窗、编辑旧地址、点击、拖点、城市切换、拒绝授权、关闭重开，以及无 Key 时手动保存。

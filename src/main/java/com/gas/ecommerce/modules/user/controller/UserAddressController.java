@@ -18,13 +18,13 @@ public class UserAddressController {
     public Result<List<UserAddressVO>> list() { return Result.success(addresses.listMine(SecurityUtils.currentUserId())); }
 
     @PostMapping
-    public Result<UserAddressVO> create(@Valid @RequestBody AddressRequest request) {
-        return Result.success(addresses.create(SecurityUtils.currentUserId(), request));
+    public Result<UserAddressVO> create(@Valid @RequestBody AddressRequest request, @RequestParam(defaultValue="false") boolean allowDuplicate) {
+        return Result.success(addresses.create(SecurityUtils.currentUserId(), allowDuplicate ? request.withDuplicateConsent() : request));
     }
 
     @PutMapping("/{id}")
-    public Result<UserAddressVO> update(@PathVariable Long id, @Valid @RequestBody AddressRequest request) {
-        return Result.success(addresses.update(SecurityUtils.currentUserId(), id, request));
+    public Result<UserAddressVO> update(@PathVariable Long id, @Valid @RequestBody AddressRequest request, @RequestParam(defaultValue="false") boolean allowDuplicate) {
+        return Result.success(addresses.update(SecurityUtils.currentUserId(), id, allowDuplicate ? request.withDuplicateConsent() : request));
     }
 
     @DeleteMapping("/{id}")

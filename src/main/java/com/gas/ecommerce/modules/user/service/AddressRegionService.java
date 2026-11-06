@@ -12,13 +12,32 @@ public class AddressRegionService {
     public record Validation(boolean valid,String message,String suggestedDistrictCode) { }
     private final JdbcTemplate db;
     public AddressRegionService(JdbcTemplate db) { this.db=db; }
-    public List<Region> all() {
+    private List<Region> overrides() {
         return db.query("SELECT code,parent_code,name,region_level,active,replacement_code,version FROM address_region ORDER BY code",
                 (r,n)->new Region(r.getString(1),r.getString(2),r.getString(3),r.getInt(4),r.getBoolean(5),r.getString(6),r.getString(7)));
     }
-    public List<Region> children(String parent) {return all().stream().filter(r->r.active() && Objects.equals(parent,r.parentCode())).toList();}
+    public List<Region> all() {
+        var merged=new LinkedHashMap<>(BundledAddressRegions.BY_CODE);
+        for (var region:overrides()) merged.put(region.code(),region);
+        return new ArrayList<>(merged.values());
+    }
+    public List<Region> children(String parent) {
+        var merged=new TreeMap<String,Region>();
+        for(var region:BundledAddressRegions.BY_PARENT.getOrDefault(parent,List.of())) merged.put(region.code(),region);
+        for(var region:overrides()) {
+            merged.remove(region.code());
+            if(Objects.equals(parent,region.parentCode())) merged.put(region.code(),region);
+        }
+        return merged.values().stream().filter(Region::active).toList();
+    }
     public Validation validate(UserAddress address) {
-        var regions=all().stream().collect(java.util.stream.Collectors.toMap(Region::code,r->r));
+        var regions=new HashMap<String,Region>();
+        for(var code:Arrays.asList(address.getProvinceCode(),address.getCityCode(),address.getDistrictCode())) {
+            if(code!=null && BundledAddressRegions.BY_CODE.containsKey(code)) regions.put(code,BundledAddressRegions.BY_CODE.get(code));
+        }
+        db.query("SELECT code,parent_code,name,region_level,active,replacement_code,version FROM address_region WHERE code IN (?,?,?)",
+                (r,n)->new Region(r.getString(1),r.getString(2),r.getString(3),r.getInt(4),r.getBoolean(5),r.getString(6),r.getString(7)),
+                address.getProvinceCode(),address.getCityCode(),address.getDistrictCode()).forEach(r->regions.put(r.code(),r));
         var p=regions.get(address.getProvinceCode());var c=regions.get(address.getCityCode());var d=regions.get(address.getDistrictCode());
         if(p==null || c==null || d==null) return new Validation(false,"请补全当前有效的省市区编码",null);
         if(!p.active() || !c.active() || !d.active()) return new Validation(false,"行政区划已调整，请确认并补全收货地区",d.replacementCode());
@@ -37,7 +56,7 @@ public class AddressRegionService {
         for(var r:incoming) {
             if(r==null) throw new BusinessException("区划条目不能为空");
             if(r.code()==null || !r.code().matches("[0-9]{6,12}") || r.name()==null || r.name().isBlank() || r.name().length()>64
-                    || r.version()==null || r.version().isBlank() || r.version().length()>64 || r.level()<1 || r.level()>3 || !seen.add(r.code())) throw new BusinessException("区划数据格式错误或编码重复");
+                    || r.version()==null || r.version().isBlank() || r.version().length()>64 || r.level()<1 || r.level()>4 || !seen.add(r.code())) throw new BusinessException("区划数据格式错误或编码重复");
             map.put(r.code(),r);
         }
         for(var r:incoming) {

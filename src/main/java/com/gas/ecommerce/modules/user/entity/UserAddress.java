@@ -9,5 +9,7 @@ import lombok.EqualsAndHashCode;
  */
 public class UserAddress extends BaseEntity { private Long userId; private String receiver; private String phone; private String phoneLast4; private String province; private String city; private String district; private String detail; private Boolean isDefault;
     private String label; private String provinceCode; private String cityCode; private String districtCode;
+    private String coordinateSystem;
+    private String adcode;
     private java.math.BigDecimal latitude; private java.math.BigDecimal longitude;
 }

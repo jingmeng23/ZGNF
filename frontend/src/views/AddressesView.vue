@@ -146,7 +146,7 @@ async function remove(address: UserAddress) { if (window.confirm('确定删除�
 onMounted(() => action(load))
 </script>
 <template>
-  <header class="page-heading"><h1>收货地址</h1><p>管理您的配送地址，让每一份安心准时送达。</p></header>
+  <header class="page-heading"><RouterLink to="/account">‹ 返回我的</RouterLink><h1>我的地址</h1><p>管理您的配送地址，让每一份安心准时送达。</p></header>
   <p v-if="message" role="status" class="inline-notice">{{ message }}</p>
   <button class="button" :disabled="busy" @click="edit()">新增收货地址</button>
   <p v-if="!list.length && !busy" class="empty">还没有收货地址，添加第一个地址吧。</p>

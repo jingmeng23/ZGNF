@@ -69,7 +69,6 @@ const orderLinks = [
           <div class="profile-links">
             <RouterLink to="/account" class="member-link"><Sparkles :size="15" />铜牌会员</RouterLink>
             <RouterLink to="/account"><Ruler :size="15" />我的尺码</RouterLink>
-            <RouterLink to="/addresses"><MapPin :size="15" />地址管理</RouterLink>
           </div>
           <RouterLink to="/account" class="plus-banner">
             <span class="plus-label">PLUS 会员</span>
@@ -109,6 +108,11 @@ const orderLinks = [
     </section>
 
     <nav class="account-menu" aria-label="个人服务">
+      <RouterLink to="/addresses" class="menu-link">
+        <MapPin :size="20" />
+        <span>我的地址</span>
+        <ArrowRight :size="16" />
+      </RouterLink>
       <RouterLink to="/coupons" class="menu-link">
         <TicketPercent :size="20" />
         <span>优惠券</span>

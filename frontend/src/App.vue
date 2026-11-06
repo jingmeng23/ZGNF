@@ -55,6 +55,7 @@ onUnmounted(() => window.removeEventListener('auth:expired', expired))
           :key="link.to"
           :to="link.to"
           class="nav-link"
+          :class="{ active: link.to === '/account' && route.path === '/addresses' }"
           :exact-active-class="'active'"
           ><component :is="link.icon" :size="21" /><span>{{ link.label }}</span
           ><b v-if="link.to === '/cart' && cart.count" class="badge">{{
@@ -71,7 +72,7 @@ onUnmounted(() => window.removeEventListener('auth:expired', expired))
     </aside>
     <main id="main-content" class="main"><RouterView /></main>
     <nav class="bottom-nav" aria-label="移动端导航">
-      <RouterLink v-for="link in links" :key="link.to" :to="link.to" exact-active-class="active"
+      <RouterLink v-for="link in links" :key="link.to" :to="link.to" exact-active-class="active" :class="{ active: link.to === '/account' && route.path === '/addresses' }"
         ><span
           ><component :is="link.icon" :size="21" /><b
             v-if="link.to === '/cart' && cart.count"

@@ -57,7 +57,7 @@ export const router = createRouter({
     {
       path: '/addresses',
       component: () => import('../views/AddressesView.vue'),
-      meta: { title: '\u6536\u8d27\u5730\u5740', requiresAuth: true },
+      meta: { title: '我的地址', requiresAuth: true },
     },
     {
       path: '/favorites',

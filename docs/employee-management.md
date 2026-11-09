@@ -2,7 +2,7 @@
 
 ## 功能与入口
 
-管理台入口 `/#/admin/employees` 接入独立页面 `frontend/src/admin/AdminEmployees.vue`，通过 `frontend/src/api/employees.ts` 调用后端。支持员工列表和详情、账号/姓名搜索、状态/门店/角色筛选、分页、新增和编辑、组织归属、启停用、软删除、角色分配及密码重置。页面提供加载状态、重复提交防护、错误展示、删除确认、只读访问和移动端布局。
+管理台入口 `/#/admin/employees` 接入独立页面 `frontend/src/admin/AdminEmployees.vue`，通过 `frontend/src/api/employees.ts` 调用后端。支持员工列表和详情、账号/姓名搜索、状态/角色筛选、分页、新增和编辑、组织归属、启停用、软删除、角色分配及密码重置。页面提供加载状态、重复提交防护、错误展示、删除确认、只读访问和移动端布局。
 
 ## 接口
 
@@ -19,7 +19,7 @@
 | PUT | `/{id}/roles` | `role:write` | 分配或清空角色 |
 | PUT | `/{id}/password` | `role:write` | 重置密码 |
 
-新增 `/options` 返回 `stores/departments/positions/roles`，每项仅含字符串 ID、名称和状态；排除已删除项，保留停用项供历史名称展示。表单只允许选择启用组织和角色，无需额外授予门店电话读取或角色权限目录查询权限。另返回服务端计算的 `canWrite/canManageRoles/currentEmployeeId`；每个写接口仍独立校验权限。
+新增 `/options` 返回 `departments/positions/roles`，每项仅含字符串 ID、名称和状态；排除已删除项，保留停用项供历史名称展示。表单只允许选择启用组织和角色，无需额外授予角色权限目录查询权限。另返回服务端计算的 `canWrite/canManageRoles/currentEmployeeId`；每个写接口仍独立校验权限。
 
 状态请求为 `{"status":"active"}` 或 `{"status":"inactive"}`。其他字段和请求结构见 [组织管理 API](organization-api.md)。Long ID 在前端始终保留为字符串。
 

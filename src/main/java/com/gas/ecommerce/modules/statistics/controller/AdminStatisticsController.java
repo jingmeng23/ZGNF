@@ -20,8 +20,6 @@ public class AdminStatisticsController {
     public Result<List<Daily>> trend(@Valid @ModelAttribute StatisticsQuery q){return Result.success(service.trend(q));}
     @GetMapping("/products") @RequiresPermission("statistics:read")
     public Result<List<ProductSales>> products(@Valid @ModelAttribute StatisticsQuery q){return Result.success(service.products(q));}
-    @GetMapping("/stores") @RequiresPermission("statistics:read")
-    public Result<List<StoreServices>> stores(@Valid @ModelAttribute StatisticsQuery q){return Result.success(service.stores(q));}
     @GetMapping("/reports/daily") @RequiresPermission("statistics:read")
     public Result<PageResult<Daily>> daily(@Valid @ModelAttribute StatisticsQuery q){return Result.success(service.dailyReport(q));}
     @GetMapping("/reports/daily/export") @RequiresPermission("statistics:export")

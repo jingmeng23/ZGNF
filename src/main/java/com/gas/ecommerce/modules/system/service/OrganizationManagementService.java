@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** 组织资料与授权的事务边界。所有关系变更共用数据库锁，避免检查与写入之间发生竞争。 */
 @Service
 public class OrganizationManagementService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrganizationManagementService.class);
     private final JdbcTemplate db;
     private final PasswordEncoder passwords;
     private final String encryptionKey;
@@ -27,19 +28,18 @@ public class OrganizationManagementService {
         this.db=db; this.passwords=passwords; this.encryptionKey=encryptionKey;
     }
 
-    public PageResult<Map<String,Object>> stores(ManagementQuery q) { return page("store",q); }
     public PageResult<Map<String,Object>> employees(ManagementQuery q) { return page("employee",q); }
     public PageResult<Map<String,Object>> roles(ManagementQuery q) { return page("role",q); }
 
-    /** 只返回表单需要的组织名称；无需额外授予门店或角色权限查询权限。 */
+    /** 只返回表单需要的组织名称；无需额外授予角色权限查询权限。 */
     public Map<String,Object> employeeOptions() {
         var auth=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         Set<String> authorities=new HashSet<>();
         if(auth!=null) auth.getAuthorities().forEach(a->authorities.add(a.getAuthority()));
         boolean bypass=authorities.contains("TEST_LOGIN_BYPASS");
         Map<String,Object> result=new LinkedHashMap<>();
-        for(String table:List.of("store","department","position","role")) {
-            String key=switch(table) {case "store"->"stores"; case "department"->"departments"; case "position"->"positions"; default->"roles";};
+        for(String table:List.of("department","position","role")) {
+            String key=switch(table) {case "department"->"departments"; case "position"->"positions"; default->"roles";};
             result.put(key,db.query("SELECT id,name,status FROM "+table+" WHERE is_deleted=0 ORDER BY name,id",this::row));
         }
         result.put("canWrite",bypass||authorities.contains("employee:write"));
@@ -59,7 +59,6 @@ public class OrganizationManagementService {
             where.append(")");
         }
         if(q.getStatus()!=null) { where.append(" AND status=?"); args.add(q.getStatus()); }
-        if("employee".equals(table) && q.getStoreId()!=null) { where.append(" AND store_id=?"); args.add(q.getStoreId()); }
         if("employee".equals(table) && q.getRoleId()!=null) {
             where.append(" AND id IN (SELECT employee_id FROM employee_role WHERE role_id=?)"); args.add(q.getRoleId());
         }
@@ -70,7 +69,6 @@ public class OrganizationManagementService {
         return new PageResult<>(rows,total,q.getPage(),q.getSize(),(total+q.getSize()-1)/q.getSize());
     }
 
-    public Map<String,Object> store(Long id) { return detail("store",id); }
     public Map<String,Object> employee(Long id) { return detail("employee",id); }
     public Map<String,Object> role(Long id) { return detail("role",id); }
     private Map<String,Object> detail(String table,Long id) {
@@ -87,7 +85,18 @@ public class OrganizationManagementService {
             Object v=rs.getObject(i);
             if(v!=null && (col.equals("id") || col.endsWith("_id"))) v=v.toString();
             if(v instanceof Timestamp t) v=t.toLocalDateTime();
-            if(col.equals("phone") && v!=null) v=EncryptUtils.decryptAes(v.toString(),encryptionKey);
+            if(col.equals("phone") && v!=null) {
+                try {
+                    v=EncryptUtils.decryptAes(v.toString(),encryptionKey);
+                } catch (IllegalStateException ex) {
+                    // Historical ciphertext may belong to a previous encryption key. Keep
+                    // the record accessible without exposing ciphertext or changing storage.
+                    String suffix=rs.getString("phone_last4");
+                    v=suffix!=null && suffix.matches("[0-9]{4}") ? "*******"+suffix : "";
+                    value.put("phoneUnavailable",true);
+                    log.warn("Unable to decrypt organization phone for record {}; verify encryption key or update phone",rs.getString("id"));
+                }
+            }
             String[] parts=col.split("_"); StringBuilder key=new StringBuilder(parts[0]);
             for(int j=1;j<parts.length;j++) key.append(Character.toUpperCase(parts[j].charAt(0))).append(parts[j].substring(1));
             value.put(key.toString(),v);
@@ -106,37 +115,18 @@ public class OrganizationManagementService {
         }
     }
 
-    @Transactional public Map<String,Object> saveStore(Long id,StoreRequest r) {
-        lock(); if(id!=null) store(id);
-        String phone=EncryptUtils.encryptAes(r.phone(),encryptionKey);
-        if(id==null) id=insert("INSERT INTO store(name,phone,phone_last4,province,city,district,address,manager,status) VALUES(?,?,?,?,?,?,?,?,?)",
-                r.name(),phone,last4(r.phone()),r.province(),r.city(),r.district(),r.address(),r.manager(),r.status());
-        else db.update("UPDATE store SET name=?,phone=?,phone_last4=?,province=?,city=?,district=?,address=?,manager=?,status=?,update_time=NOW() WHERE id=?",
-                r.name(),phone,last4(r.phone()),r.province(),r.city(),r.district(),r.address(),r.manager(),r.status(),id);
-        ensureWorkOrderStaff(); return store(id);
-    }
-
-    @Transactional public void deleteStore(Long id) {
-        lock(); store(id);
-        if(count("SELECT COUNT(*) FROM employee WHERE store_id=? AND is_deleted=0",id)>0
-                || count("SELECT COUNT(*) FROM inventory WHERE store_id=? AND is_deleted=0",id)>0
-                || count("SELECT COUNT(*) FROM work_order WHERE store_id=? AND is_deleted=0",id)>0)
-            throw new BusinessException("门店存在员工、库存或工单，不能删除");
-        softDelete("store",id);
-    }
-
     @Transactional public Map<String,Object> createEmployee(EmployeeCreateRequest r) {
         lock(); validateEmployee(r.employee()); validatePassword(r.password());
         var e=r.employee();
-        Long id=insert("INSERT INTO employee(username,name,password_hash,phone,phone_last4,store_id,department_id,position_id,status) VALUES(?,?,?,?,?,?,?,?,?)",
-                e.username(),e.name(),passwords.encode(r.password()),EncryptUtils.encryptAes(e.phone(),encryptionKey),last4(e.phone()),e.storeId(),e.departmentId(),e.positionId(),e.status());
+        Long id=insert("INSERT INTO employee(username,name,password_hash,phone,phone_last4,department_id,position_id,status) VALUES(?,?,?,?,?,?,?,?)",
+                e.username(),e.name(),passwords.encode(r.password()),EncryptUtils.encryptAes(e.phone(),encryptionKey),last4(e.phone()),e.departmentId(),e.positionId(),e.status());
         return employee(id);
     }
 
     @Transactional public Map<String,Object> updateEmployee(Long id,EmployeeRequest r) {
         lock(); employee(id); validateEmployee(r);
-        updateUnique("UPDATE employee SET username=?,name=?,phone=?,phone_last4=?,store_id=?,department_id=?,position_id=?,status=?,update_time=NOW() WHERE id=?",
-                r.username(),r.name(),EncryptUtils.encryptAes(r.phone(),encryptionKey),last4(r.phone()),r.storeId(),r.departmentId(),r.positionId(),r.status(),id);
+        updateUnique("UPDATE employee SET username=?,name=?,phone=?,phone_last4=?,department_id=?,position_id=?,status=?,update_time=NOW() WHERE id=?",
+                r.username(),r.name(),EncryptUtils.encryptAes(r.phone(),encryptionKey),last4(r.phone()),r.departmentId(),r.positionId(),r.status(),id);
         ensureAdministrator(); ensureWorkOrderStaff(); return employee(id);
     }
 
@@ -176,6 +166,11 @@ public class OrganizationManagementService {
             if("admin".equals(r.roleKey())) throw new BusinessException("不能创建内置管理员角色");
             id=insert("INSERT INTO role(name,role_key,status) VALUES(?,?,?)",r.name(),r.roleKey(),r.status());
         }
+        if(r.permissionIds()!=null) {
+            customRole(id); validateIds("permission",r.permissionIds());
+            db.update("DELETE FROM role_permission WHERE role_id=?",id);
+            for(Long permissionId:r.permissionIds()) db.update("INSERT INTO role_permission(role_id,permission_id) VALUES(?,?)",id,permissionId);
+        }
         ensureWorkOrderStaff(); return role(id);
     }
 
@@ -199,11 +194,11 @@ public class OrganizationManagementService {
     }
 
     private void validateEmployee(EmployeeRequest r) {
-        reference("store",r.storeId()); reference("department",r.departmentId()); reference("position",r.positionId());
+        reference("department",r.departmentId()); reference("position",r.positionId());
     }
     private void reference(String table,Long id) {
         if(id!=null && count("SELECT COUNT(*) FROM "+table+" WHERE id=? AND is_deleted=0 AND status='active'",id)!=1)
-            throw new BusinessException("关联门店、部门或岗位不存在或已停用");
+            throw new BusinessException("关联部门或岗位不存在或已停用");
     }
     private void validatePassword(String password) {
         if(password.getBytes(StandardCharsets.UTF_8).length>72) throw new BusinessException("密码不能超过72个UTF-8字节");
@@ -224,15 +219,14 @@ public class OrganizationManagementService {
         long invalid=count("""
             SELECT COUNT(*) FROM work_order w
             WHERE w.is_deleted=0 AND w.status IN ('accepted','processing') AND w.employee_id IS NOT NULL
-              AND NOT EXISTS (SELECT 1 FROM employee e JOIN store s ON s.id=e.store_id
-                WHERE e.id=w.employee_id AND e.store_id=w.store_id AND e.status='active' AND e.is_deleted=0
-                  AND s.status='active' AND s.is_deleted=0
+              AND NOT EXISTS (SELECT 1 FROM employee e
+                WHERE e.id=w.employee_id AND e.status='active' AND e.is_deleted=0
                   AND EXISTS (SELECT 1 FROM employee_role er JOIN role r ON r.id=er.role_id
                     JOIN role_permission rp ON rp.role_id=r.id JOIN permission p ON p.id=rp.permission_id
                     WHERE er.employee_id=e.id AND r.status='active' AND r.is_deleted=0 AND rp.is_deleted=0
                       AND p.is_deleted=0 AND p.permission_key='workorder:process'))
             """);
-        if(invalid>0) throw new BusinessException("存在未完结工单，须先改派或完结，再停用门店、调整员工或撤销处理权限");
+        if(invalid>0) throw new BusinessException("存在未完结工单，须先改派或完结，再调整员工或撤销处理权限");
     }
     private void lock() { db.queryForObject("SELECT id FROM management_lock WHERE id=1 FOR UPDATE",Integer.class); }
     private long count(String sql,Object...args) { return db.queryForObject(sql,Long.class,args); }

@@ -1,13 +1,12 @@
 # 经营总览与统计报表 API
 
-管理员接口前缀 `/api/v1/admin/statistics`，需要管理员 access token。V1.10 迁移将 `statistics:read`、`statistics:export` 分配给内置 admin 角色；其他角色通过权限管理授权。统计为全商城范围，不按员工所属门店隔离。
+管理员接口前缀 `/api/v1/admin/statistics`，需要管理员 access token。V1.10 迁移将 `statistics:read`、`statistics:export` 分配给内置 admin 角色；其他角色通过权限管理授权。统计为全商城范围。
 
 | 方法 | 路径 | 权限 | 功能 |
 | --- | --- | --- | --- |
 | GET | `/overview` | statistics:read | 经营指标、上期比较、工单积压、订单状态与最近订单 |
 | GET | `/trend` | statistics:read | 按日趋势，空日期补零 |
 | GET | `/products` | statistics:read | 已支付商品销量排行 |
-| GET | `/stores` | statistics:read | 门店工单表现排行 |
 | GET | `/reports/daily` | statistics:read | 分页经营日报 |
 | GET | `/reports/daily/export` | statistics:export | CSV 导出所选日期全部日报 |
 
@@ -16,7 +15,7 @@
 示例：`GET /api/v1/admin/statistics/overview?startDate=2026-10-01&endDate=2026-10-22`。
 
 - startDate、endDate：`yyyy-MM-dd`，日期两端都包含。endDate 默认上海时区当天，startDate 默认等于 endDate。最大 366 天，起始日期不能晚于结束日期，允许查询空数据或未来日期。
-- limit：商品／门店排行返回数量，默认 10，范围 1～100。
+- limit：商品排行返回数量，默认 10，范围 1～100。
 - 日报 page 默认 1，size 默认 20，最大 100；sort 支持 date 或默认 createTime（均按日期排序），order 默认 desc，支持 asc。超出末页返回空列表。
 - 导出包含整个范围，按日期升序，不受分页参数影响。返回 UTF-8 BOM CSV，文件名 `business-daily.csv`。其他接口使用统一 Result 响应；日报 data 为 PageResult。
 
@@ -53,12 +52,6 @@ pendingWorkOrders 是当前全部未完成工单数（pending/accepted/processin
 按选定日期已收款订单的商品行统计；quantity 降序、productId 升序。返回 productId、productName、paidOrders、quantity、merchandiseAmount。
 
 商品名来自历史订单快照；同商品存在多个名字时取字典序最大快照名。商品后来删除不影响其历史订单统计。merchandiseAmount 为商品行优惠前金额，**未分摊订单优惠券，也未扣退款**，因此不等于实收金额；销量是支付时的毛销量，后续退款不回减。关联多条支付记录不会重复放大商品行数量。
-
-### 门店表现
-
-返回 storeId、storeName、createdWorkOrders（按创建时间）、completedWorkOrders（按完成时间）、openWorkOrders（当前全部积压）。按完成数、新建数降序及门店 ID 升序排列。仅返回有未删除工单记录的门店组，未分配门店单独汇总；停用或删除门店的历史工单仍保留。
-
-工单按**当前分配门店**归属，改派会改变历史归属。目前商城订单没有销售门店字段，库存支持跨仓预占，不能从库存仓推导门店销售额，因此本接口提供服务业绩，不提供门店销售收入。
 
 ## 数据库与验证
 

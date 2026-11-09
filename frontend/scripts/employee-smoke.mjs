@@ -70,17 +70,21 @@ try {
   await send('Page.enable')
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false })
   await send('Page.addScriptToEvaluateOnNewDocument', {source: `(() => {
+    // Only a navigation fixture: employee API responses are mocked below.
+    const claims=btoa(JSON.stringify({type:'access',role:'admin',exp:Math.floor(Date.now()/1000)+3600}));
+    sessionStorage.setItem('zgnf.access-session',JSON.stringify({token:'mock.'+claims+'.mock',expiresAt:Date.now()+3600000}));
     window.__calls=[];
-    window.__staff=[{id:'9007199254740993',username:'technician',name:'服务员工',phone:'13800138000',storeId:'900',departmentId:null,positionId:null,status:'active',roleIds:['1'],createTime:'2026-10-28 09:00:00',updateTime:'2026-10-28 09:00:00'}];
-    window.__readonly=false;
+    window.__staff=[{id:'9007199254740993',username:'technician',name:'服务员工',phone:'13800138000',departmentId:null,positionId:null,status:'active',roleIds:['1'],createTime:'2026-10-28 09:00:00',updateTime:'2026-10-28 09:00:00'}];
+    window.__readonly=sessionStorage.getItem('smoke.readonly')==='true';
     const original=window.fetch.bind(window);
     window.fetch=async (url,init={})=>{
       const u=new URL(url,location.origin),path=u.pathname;
+      if(path==='/api/v1/cart') return new Response(JSON.stringify({code:200,data:{items:[]}}),{headers:{'Content-Type':'application/json'}});
       if(!path.startsWith('/api/v1/admin/employees')) return original(url,init);
       const body=init.body?JSON.parse(init.body):null;
       window.__calls.push({path,method:init.method||'GET',body});
       let data;
-      if(path.endsWith('/options')) data={stores:[{id:'900',name:'城东门店',status:'active'}],departments:[],positions:[],roles:[{id:'1',name:'服务人员',status:'active'}],canWrite:!window.__readonly,canManageRoles:!window.__readonly,currentEmployeeId:'7'};
+      if(path.endsWith('/options')) data={departments:[],positions:[],roles:[{id:'1',name:'服务人员',status:'active'}],canWrite:!window.__readonly,canManageRoles:!window.__readonly,currentEmployeeId:'7'};
       else if(init.method==='POST') { data={...body.employee,id:'9007199254740994',roleIds:[],createTime:'2026-10-28 10:00:00',updateTime:'2026-10-28 10:00:00'};window.__staff.push(data); }
       else if(path.endsWith('/status')) { data=window.__staff.find(r=>path.includes('/'+r.id+'/'));data.status=body.status; }
       else if(path.endsWith('/roles')) { data=window.__staff.find(r=>path.includes('/'+r.id+'/'));data.roleIds=body.ids; }
@@ -94,6 +98,7 @@ try {
     window.confirm=()=>true;
   })()` });
   await navigate('/admin/employees','员工管理');
+  assert(await evaluate("![...document.querySelectorAll('.admin-nav a')].some(a=>a.getAttribute('href')?.includes('/admin/stores'))"),'Removed module must not appear in navigation');
   await until(()=>evaluate("document.querySelector('tbody')?.textContent.includes('technician')"),'employee list');
   async function click(text,scope='document') { await evaluate(`[...${scope}.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}).click()`); }
   await click('详情');
@@ -119,19 +124,28 @@ try {
   await until(()=>evaluate("window.__calls.some(c=>c.path.endsWith('/password')&&c.body.password==='new-strong-password')"),'reset password');
   await click('新增员工');
   await until(()=>evaluate("document.querySelector('.employee-editor h2')?.textContent==='新增员工'"),'create form');
+  assert(await evaluate("!document.querySelector('.employee-fields')?.textContent.includes('门店')"),'Employee creation must not require a location');
+  const createShots=resolve('.screenshots');mkdirSync(createShots,{recursive:true});
+  await delay(500);
+  const desktopCreate=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(createShots,'employees-create-desktop.png'),Buffer.from(desktopCreate.data,'base64'));
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await evaluate("document.querySelector('.employee-editor').scrollIntoView({block:'start',behavior:'instant'})");
+  assert(await evaluate('document.documentElement.scrollWidth<=390'),'mobile create form overflow');
+  const mobileCreate=await send('Page.captureScreenshot',{format:'png'});writeFileSync(join(createShots,'employees-create-mobile.png'),Buffer.from(mobileCreate.data,'base64'));
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await evaluate("const inputs=document.querySelectorAll('.employee-fields input');['new_staff','新员工','13900139000','initial-password'].forEach((v,i)=>{inputs[i].value=v;inputs[i].dispatchEvent(new Event('input',{bubbles:true}))})");
-  await click('保存');
+  await click('创建员工');
   await until(()=>evaluate("document.querySelector('tbody')?.textContent.includes('new_staff')"),'create employee');
   await evaluate("const row=[...document.querySelectorAll('tbody tr')].find(r=>r.textContent.includes('new_staff'));[...row.querySelectorAll('button')].find(b=>b.textContent==='删除').click()");
   await until(()=>evaluate("!document.querySelector('tbody')?.textContent.includes('new_staff')"),'delete employee');
   await evaluate("var input=document.querySelector('.employee-tools input');input.value='不存在';input.dispatchEvent(new Event('input',{bubbles:true}))");
   await click('查询');
   await until(()=>evaluate("document.querySelector('.empty-state')?.textContent.includes('暂无')"),'search empty state');
-  await evaluate("var input=document.querySelector('.employee-tools input');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));window.__readonly=true");
-  await navigate('/admin/orders','订单管理');
-  await navigate('/admin/employees','员工管理');
+  await evaluate("var input=document.querySelector('.employee-tools input');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));sessionStorage.setItem('smoke.readonly','true')");
+  await send('Page.reload');
   await until(()=>evaluate("document.querySelector('tbody')?.textContent.includes('technician')"),'readonly employee list');
-  assert.equal(await evaluate("[...document.querySelectorAll('.row-actions button')].map(b=>b.textContent).join(',')"),'详情');
+  await until(()=>evaluate("document.querySelector('.page-heading button')?.disabled"),'read-only permissions loaded');
+  assert.equal(await evaluate("[...document.querySelectorAll('.row-actions button')].filter(b=>!b.disabled).map(b=>b.textContent).join(',')"),'详情');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   await delay(200);
   assert(await evaluate('document.documentElement.scrollWidth<=390'),'mobile viewport overflow');

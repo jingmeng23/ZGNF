@@ -53,10 +53,10 @@ public class InventoryReservationService {
         // Lock products and inventory rows in a consistent order across customers.
         for (OrderItem item : items.stream().sorted(Comparator.comparing(OrderItem::getProductId)).toList()) {
             List<Stock> stocks = jdbc.query(
-                    "SELECT id, product_id, store_id, quantity, locked_quantity FROM inventory " +
+                    "SELECT id, product_id, quantity, locked_quantity FROM inventory " +
                     "WHERE product_id=? AND is_deleted=0 ORDER BY id FOR UPDATE",
                     (rs, n) -> new Stock(rs.getLong("id"), rs.getLong("product_id"),
-                            rs.getObject("store_id", Long.class), rs.getInt("quantity"), rs.getInt("locked_quantity")),
+                            rs.getInt("quantity"), rs.getInt("locked_quantity")),
                     item.getProductId());
             long available = stocks.stream().mapToLong(s -> Math.max(0L, (long) s.quantity() - s.locked())).sum();
             if (available < item.getQuantity()) throw new BusinessException("商品库存不足：" + item.getProductName());
@@ -87,8 +87,8 @@ public class InventoryReservationService {
                 (rs, n) -> new Reservation(rs.getLong("id"), rs.getLong("inventory_id"),
                         rs.getLong("product_id"), rs.getInt("quantity")), order.getId()==null ? order.getOrderNo() : order.getId());
         for (Reservation row : reservations) {
-            Stock stock=jdbc.queryForObject("SELECT id,product_id,store_id,quantity,locked_quantity FROM inventory WHERE id=? FOR UPDATE",
-                    (rs,n)->new Stock(rs.getLong("id"),rs.getLong("product_id"),rs.getObject("store_id",Long.class),rs.getInt("quantity"),rs.getInt("locked_quantity")),row.inventoryId());
+            Stock stock=jdbc.queryForObject("SELECT id,product_id,quantity,locked_quantity FROM inventory WHERE id=? FOR UPDATE",
+                    (rs,n)->new Stock(rs.getLong("id"),rs.getLong("product_id"),rs.getInt("quantity"),rs.getInt("locked_quantity")),row.inventoryId());
             String sql = consume
                     ? "UPDATE inventory SET quantity=quantity-?, locked_quantity=locked_quantity-?, version=version+1, " +
                       "update_time=CURRENT_TIMESTAMP WHERE id=? AND is_deleted=0 AND quantity>=? AND locked_quantity>=?"
@@ -106,10 +106,10 @@ public class InventoryReservationService {
     }
 
     private void log(Stock stock, int quantity, String type, String orderNo, int after, int lockedAfter) {
-        jdbc.update("INSERT INTO inventory_log(inventory_id,product_id,store_id,change_quantity,change_type,reference_no,quantity_before,quantity_after,locked_before,locked_after) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?)", stock.id(),stock.productId(),stock.storeId(),quantity,type,orderNo,stock.quantity(),after,stock.locked(),lockedAfter);
+        jdbc.update("INSERT INTO inventory_log(inventory_id,product_id,change_quantity,change_type,reference_no,quantity_before,quantity_after,locked_before,locked_after) " +
+                "VALUES(?,?,?,?,?,?,?,?,?)", stock.id(),stock.productId(),quantity,type,orderNo,stock.quantity(),after,stock.locked(),lockedAfter);
     }
 
-    private record Stock(Long id, Long productId, Long storeId, int quantity, int locked) { }
+    private record Stock(Long id, Long productId, int quantity, int locked) { }
     private record Reservation(Long id, Long inventoryId, Long productId, int quantity) { }
 }

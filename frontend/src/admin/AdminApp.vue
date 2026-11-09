@@ -15,18 +15,19 @@ import {
   Settings2,
   ShieldCheck,
   ShoppingBag,
-  Store,
   Users,
   Wrench,
 } from 'lucide-vue-next'
 import './admin.css'
 import { adminDemoMode } from '../api/admin'
 import { useAuthStore } from '../stores/auth'
+import { adminProfile, canVisit } from './permissions'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 function logout() {
+  adminProfile.value = null
   auth.logout()
   void router.replace('/admin/login')
 }
@@ -52,7 +53,6 @@ const sections = [
   {
     title: '组织与系统',
     links: [
-      { path: '/admin/stores', label: '门店管理', icon: Store },
       { path: '/admin/employees', label: '员工管理', icon: Users },
       { path: '/admin/users', label: '用户管理', icon: Users },
       { path: '/admin/roles', label: '角色权限', icon: ShieldCheck },
@@ -66,6 +66,7 @@ const pageName = computed(
     sections.flatMap((section) => section.links).find((link) => link.path === route.path)?.label ??
     '业务管理',
 )
+const visibleSections = computed(() => sections.map(section => ({ ...section, links: section.links.filter(link => canVisit(link.path)) })).filter(section => section.links.length))
 </script>
 
 <template>
@@ -83,7 +84,7 @@ const pageName = computed(
           ><ChevronDown :size="15" />
         </div>
         <nav class="admin-nav" aria-label="管理导航">
-          <section v-for="section in sections" :key="section.title" class="admin-nav-section">
+          <section v-for="section in visibleSections" :key="section.title" class="admin-nav-section">
             <p>{{ section.title }}</p>
             <RouterLink
               v-for="link in section.links"

@@ -9,6 +9,5 @@ import lombok.EqualsAndHashCode;
 public class ManagementQuery extends PageRequest {
     @Size(max = 100) private String keyword;
     @Pattern(regexp = "active|inactive") private String status;
-    @Positive private Long storeId;
     @Positive private Long roleId;
 }

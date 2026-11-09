@@ -15,5 +15,4 @@ public final class StatisticsVO {
     public record RecentOrder(Long id,String orderNo,String status,BigDecimal payAmount,LocalDateTime createTime) { }
     public record Daily(LocalDate date,Metrics metrics) { }
     public record ProductSales(Long productId,String productName,long paidOrders,long quantity,BigDecimal merchandiseAmount) { }
-    public record StoreServices(Long storeId,String storeName,long createdWorkOrders,long completedWorkOrders,long openWorkOrders) { }
 }

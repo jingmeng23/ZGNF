@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 // MyBatis-Plus 3.5.17 将 Spring Service 接口包从 extension.service 调整到了 spring.service。
 /**
- * 工单状态与日志在同一事务内变更，组织锁保护派单和员工归属校验。
+ * 工单状态与日志在同一事务内变更，组织锁保护派单和员工权限校验。
  */
 @Service
 public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder> implements WorkOrderService {
@@ -63,12 +63,11 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
                 .eq(WorkOrder::getUserId,userId).eq(WorkOrder::getRequestId,r.requestId()));
         if(existing!=null) return view(existing);
         if(r.appointmentTime()==null || !r.appointmentTime().isAfter(LocalDateTime.now())) throw error("预约时间必须晚于当前时间");
-        if(r.storeId()!=null) store(r.storeId());
         var a=addresses.selectOne(Wrappers.<UserAddress>lambdaQuery()
                 .eq(UserAddress::getId,r.addressId())
                 .eq(UserAddress::getUserId,userId));
         if(a==null) throw error("服务地址不存在");
-        WorkOrder w=new WorkOrder(); w.setUserId(userId); w.setStoreId(r.storeId());
+        WorkOrder w=new WorkOrder(); w.setUserId(userId);
         w.setWorkOrderNo("WO"+UUID.randomUUID().toString().replace("-",""));
         w.setRequestId(r.requestId()); w.setType(r.type()); w.setTitle(r.title()); w.setDescription(r.description());
         w.setStatus("pending"); w.setAppointmentTime(r.appointmentTime()); w.setIsDeleted(0);
@@ -81,14 +80,10 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
         active(userId,false); return pageOrders(userId,q);
     }
     @Override public PageResult<WorkOrderVO> listAdmin(WorkOrderQuery q) { return pageOrders(null,q); }
-    @Override public List<WorkOrderOptionsVO.StoreOption> stores() {
-        return db.query("SELECT id,name FROM store WHERE status='active' AND is_deleted=0 ORDER BY name,id",
-                (rs,n)->new WorkOrderOptionsVO.StoreOption(rs.getLong("id"),rs.getString("name")));
-    }
     @Override public WorkOrderOptionsVO options() {
-        var candidates=db.query("SELECT DISTINCT e.id,COALESCE(e.name,e.username) AS name,e.store_id FROM employee e JOIN store s ON s.id=e.store_id AND s.status='active' AND s.is_deleted=0 JOIN employee_role er ON er.employee_id=e.id AND er.is_deleted=0 JOIN role r ON r.id=er.role_id AND r.status='active' AND r.is_deleted=0 JOIN role_permission rp ON rp.role_id=r.id AND rp.is_deleted=0 JOIN permission p ON p.id=rp.permission_id AND p.is_deleted=0 WHERE e.status='active' AND e.is_deleted=0 AND p.permission_key='workorder:process' ORDER BY e.id",
-                (rs,n)->new WorkOrderOptionsVO.EmployeeOption(rs.getLong("id"),rs.getString("name"),rs.getLong("store_id")));
-        return new WorkOrderOptionsVO(stores(),candidates);
+        var candidates=db.query("SELECT DISTINCT e.id,COALESCE(e.name,e.username) AS name FROM employee e JOIN employee_role er ON er.employee_id=e.id AND er.is_deleted=0 JOIN role r ON r.id=er.role_id AND r.status='active' AND r.is_deleted=0 JOIN role_permission rp ON rp.role_id=r.id AND rp.is_deleted=0 JOIN permission p ON p.id=rp.permission_id AND p.is_deleted=0 WHERE e.status='active' AND e.is_deleted=0 AND p.permission_key='workorder:process' ORDER BY e.id",
+                (rs,n)->new WorkOrderOptionsVO.EmployeeOption(rs.getLong("id"),rs.getString("name")));
+        return new WorkOrderOptionsVO(candidates);
     }
     @Override public PageResult<WorkOrderVO> listAssigned(Long employeeId,WorkOrderQuery q) {
         employee(employeeId); return pageOrders(null,q,employeeId);
@@ -108,7 +103,7 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
         String sort=q.resolveSort(Map.of("createTime","create_time","updateTime","update_time","appointmentTime","appointment_time"));
         var w=Wrappers.<WorkOrder>lambdaQuery().eq(userId!=null,WorkOrder::getUserId,userId)
                 .eq(q.getStatus()!=null,WorkOrder::getStatus,q.getStatus()).eq(q.getType()!=null,WorkOrder::getType,q.getType())
-                .eq(q.getStoreId()!=null,WorkOrder::getStoreId,q.getStoreId()).eq(q.getEmployeeId()!=null,WorkOrder::getEmployeeId,q.getEmployeeId());
+                .eq(q.getEmployeeId()!=null,WorkOrder::getEmployeeId,q.getEmployeeId());
         w.eq(assignedId!=null,WorkOrder::getEmployeeId,assignedId);
         if(Boolean.TRUE.equals(q.getOverdue())) w.in(WorkOrder::getStatus,List.of("pending","accepted","processing")).lt(WorkOrder::getAppointmentTime,LocalDateTime.now());
         if(q.getKeyword()!=null && !q.getKeyword().isBlank()) w.and(x->x.like(WorkOrder::getTitle,q.getKeyword()).or().like(WorkOrder::getWorkOrderNo,q.getKeyword()));
@@ -136,16 +131,15 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
     }
     @Override @Transactional
     public WorkOrderVO assign(Long operatorId,Long id,WorkOrderAssignRequest r) {
-        lockManagement(); employee(operatorId); store(r.storeId()); var w=require(id,true);
+        lockManagement(); employee(operatorId); var w=require(id,true);
         if(!Set.of("pending","accepted").contains(w.getStatus())) throw error("当前工单不能派单或改派");
-        var e=employee(r.employeeId());
-        if(!r.storeId().equals(e.getStoreId())) throw error("服务人员不属于所选门店");
+        employee(r.employeeId());
         long capable=db.queryForObject("SELECT COUNT(*) FROM employee_role er JOIN role r ON r.id=er.role_id AND r.status='active' AND r.is_deleted=0 JOIN role_permission rp ON rp.role_id=r.id AND rp.is_deleted=0 JOIN permission p ON p.id=rp.permission_id AND p.is_deleted=0 WHERE er.employee_id=? AND p.permission_key='workorder:process'",Long.class,r.employeeId());
         if(capable==0) throw error("服务人员未获工单处理权限");
-        if("accepted".equals(w.getStatus()) && r.employeeId().equals(w.getEmployeeId()) && r.storeId().equals(w.getStoreId())) return view(w);
-        String prior="原门店="+w.getStoreId()+", 原员工="+w.getEmployeeId();
-        w.setEmployeeId(r.employeeId()); w.setStoreId(r.storeId()); w.setStatus("accepted"); w.setAcceptedTime(LocalDateTime.now());
-        updateById(w); log(w,operatorId,"employee","assigned",prior+"; 新门店="+r.storeId()+", 新员工="+r.employeeId()+"; "+r.remark()); return view(w);
+        if("accepted".equals(w.getStatus()) && r.employeeId().equals(w.getEmployeeId())) return view(w);
+        String prior="原员工="+w.getEmployeeId();
+        w.setEmployeeId(r.employeeId()); w.setStatus("accepted"); w.setAcceptedTime(LocalDateTime.now());
+        updateById(w); log(w,operatorId,"employee","assigned",prior+"; 新员工="+r.employeeId()+"; "+r.remark()); return view(w);
     }
     @Override @Transactional
     public WorkOrderVO start(Long operatorId,Long id,WorkOrderActionRequest r) {
@@ -167,16 +161,14 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
         log(w,operatorId,"employee","completed",r.remark()); return view(w);
     }
     private void assignee(Long id,WorkOrder w) {
-        var e=employee(id);
-        if(!id.equals(w.getEmployeeId()) || !Objects.equals(e.getStoreId(),w.getStoreId()))
+        employee(id);
+        if(!id.equals(w.getEmployeeId()))
             throw new AccessDeniedException("仅指派的服务人员可处理工单");
-        store(w.getStoreId());
     }
     private Employee employee(Long id) {
         var e=db.query("SELECT * FROM employee WHERE id=? AND is_deleted=0 AND status='active'",new BeanPropertyRowMapper<>(Employee.class),id);
         if(e.isEmpty()) throw error("员工不存在或已停用"); return e.getFirst();
     }
-    private void store(Long id) {if(db.queryForObject("SELECT COUNT(*) FROM store WHERE id=? AND is_deleted=0 AND status='active'",Long.class,id)==0) throw error("门店不存在或已停用");}
     private void lockManagement() {db.queryForObject("SELECT id FROM management_lock WHERE id=1 FOR UPDATE",Integer.class);}
     private void active(Long id,boolean lock) {var u=lock?users.lockActiveUser(id):users.selectById(id); if(u==null || !"active".equals(u.getStatus())) throw error("用户不存在或已停用");}
     private WorkOrder require(Long id,boolean lock) {var w=lock?baseMapper.lockById(id):getById(id); if(w==null) throw error("工单不存在"); return w;}
@@ -192,7 +184,7 @@ public class WorkOrderServiceImpl extends ServiceImpl<WorkOrderMapper, WorkOrder
             var a=json.treeToValue(node,OrderAddressVO.class);
             address=new OrderAddressVO(a.receiver(),EncryptUtils.decryptAes(a.phone(),key),a.province(),a.city(),a.district(),a.detail());
         } catch(JsonProcessingException ex) {throw new IllegalStateException("服务地址读取失败",ex);}
-        return new WorkOrderVO(w.getId(),w.getWorkOrderNo(),w.getUserId(),w.getStoreId(),w.getEmployeeId(),w.getTitle(),w.getDescription(),w.getType(),w.getStatus(),address,w.getAppointmentTime(),w.getAcceptedTime(),w.getStartedTime(),w.getCompletedTime(),w.getResult(),w.getCreateTime(),w.getUpdateTime());
+        return new WorkOrderVO(w.getId(),w.getWorkOrderNo(),w.getUserId(),w.getEmployeeId(),w.getTitle(),w.getDescription(),w.getType(),w.getStatus(),address,w.getAppointmentTime(),w.getAcceptedTime(),w.getStartedTime(),w.getCompletedTime(),w.getResult(),w.getCreateTime(),w.getUpdateTime());
     }
     private BusinessException error(String message) {return new BusinessException(message);}
 }

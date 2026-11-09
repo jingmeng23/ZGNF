@@ -4,4 +4,5 @@ target/
 *.iml
 .vscode/
 *.log
+/artifacts/store-removal/
 .env

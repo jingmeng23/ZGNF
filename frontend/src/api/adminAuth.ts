@@ -12,6 +12,7 @@ export interface AdminLoginResponse {
 }
 
 export const adminAuthApi = {
+  me: () => request<AdminLoginResponse['admin']>('/admin/auth/me'),
   login: (username: string, password: string) =>
     request<AdminLoginResponse>('/admin/auth/login', {
       method: 'POST',

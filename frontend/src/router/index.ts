@@ -4,11 +4,13 @@ import { adminDemoMode } from '../api/admin'
 import { hasAdminAccess } from '../admin/access'
 import { modules } from '../admin/adminData'
 import { loginDisabled } from '../platform/testMode'
+import { canVisit, firstAdminPage, refreshAdminProfile } from '../admin/permissions'
 
 export const router = createRouter({
   history: createWebHashHistory(),
   scrollBehavior: () => ({ top: 0 }),
   routes: [
+    { path: '/admin/no-access', component: () => import('../admin/AdminNoAccess.vue'), meta: { title: '暂无访问权限' } },
     { path: '/admin/employees', component: () => import('../admin/AdminEmployees.vue'), meta: { title: '员工管理' } },
     { path: '/admin/users', component: () => import('../admin/AdminUsers.vue'), meta: { title: '用户管理' } },
     { path: '/admin/roles', component: () => import('../admin/AdminRoles.vue'), meta: { title: '角色权限' } },
@@ -135,13 +137,17 @@ export const router = createRouter({
     },
   ],
 })
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (loginDisabled && to.path === '/admin/login') return '/admin'
   if (loginDisabled && to.path === '/login') return '/account'
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (to.params.module && !Object.hasOwn(modules, String(to.params.module))) return '/admin'
     if (!loginDisabled && !adminDemoMode && !hasAdminAccess())
       return { path: '/admin/login', query: { redirect: to.fullPath } }
+    try { await refreshAdminProfile() } catch {
+      return { path: '/admin/login', query: { redirect: to.fullPath } }
+    }
+    if (to.path !== '/admin/no-access' && !canVisit(to.path)) return firstAdminPage()
   }
   if (to.meta.requiresAuth && !session.read())
     return { path: '/login', query: { redirect: to.fullPath } }

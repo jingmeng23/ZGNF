@@ -7,7 +7,6 @@ public record EmployeeRequest(
         @NotBlank @Pattern(regexp="[a-zA-Z0-9_.-]{3,64}") String username,
         @NotBlank @Size(max=100) String name,
         @NotBlank @Pattern(regexp="1[3-9][0-9]{9}") String phone,
-        @Positive Long storeId,
         @Positive Long departmentId,
         @Positive Long positionId,
         @NotNull @Pattern(regexp="active|inactive") String status) { }

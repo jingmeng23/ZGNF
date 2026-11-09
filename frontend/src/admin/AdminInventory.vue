@@ -32,7 +32,7 @@ const stockLoading = ref(false),
 const stockError = ref(''),
   logError = ref(''),
   actionError = ref('')
-const options = ref<InventoryOptions>({ products: [], stores: [] })
+const options = ref<InventoryOptions>({ products: [] })
 const tab = ref<'stock' | 'logs'>('stock')
 const loading = computed(() => (tab.value === 'stock' ? stockLoading.value : logLoading.value))
 const error = computed(
@@ -42,7 +42,6 @@ const query = reactive<InventoryQuery>({
   page: 1,
   size: 20,
   keyword: '',
-  headquarters: '',
   availableMax: '',
 })
 const logQuery = reactive<InventoryLogQuery>({
@@ -54,7 +53,7 @@ const logQuery = reactive<InventoryLogQuery>({
 })
 const mode = ref<'create' | 'inbound' | 'outbound' | 'adjust' | null>(null)
 const selected = ref<InventoryRow | null>(null)
-const form = reactive({ productId: '', storeId: '', quantity: 0, requestId: '', remark: '' })
+const form = reactive({ productId: '', quantity: 0, requestId: '', remark: '' })
 const logTypeNames: Record<string, string> = {
   initial: '期初建档',
   inbound: '入库',
@@ -134,7 +133,6 @@ async function open(action: 'create' | 'inbound' | 'outbound' | 'adjust', row?: 
     mode.value = action
     Object.assign(form, {
       productId: row?.productId ?? '',
-      storeId: row?.storeId ?? '',
       quantity: action === 'adjust' ? row!.quantity : action === 'create' ? 0 : 1,
       requestId: `inv-${crypto.randomUUID()}`,
       remark: '',
@@ -200,7 +198,6 @@ async function submit() {
       const created = await inventoryApi.create({
         ...input,
         productId: form.productId.trim(),
-        storeId: form.storeId.trim() || null,
       })
       createdInventoryId = created.inventoryId
     } else if (mode.value === 'inbound') await inventoryApi.inbound(selected.value!.id, input)
@@ -209,7 +206,6 @@ async function submit() {
     mode.value = null
     if (createdInventoryId) {
       query.keyword = ''
-      query.headquarters = ''
       query.availableMax = ''
       query.page = 1
       tab.value = 'stock'
@@ -304,7 +300,7 @@ onMounted(() => {
             }}
           </h2>
           <p v-if="selected">
-            {{ selected.productName }} · {{ selected.storeName }} · 当前实物
+            {{ selected.productName }} · 当前实物
             {{ selected.quantity }}，锁定 {{ selected.lockedQuantity }}
           </p>
         </div>
@@ -316,13 +312,6 @@ onMounted(() => {
             <option disabled value="">请选择商品</option>
             <option v-for="product in options.products" :key="product.id" :value="product.id">
               {{ product.name }} (#{{ product.id }})
-            </option>
-          </select></label
-        ><label v-if="mode === 'create'"
-          >仓库<select v-model="form.storeId" :disabled="busy">
-            <option value="">总部仓</option>
-            <option v-for="store in options.stores" :key="store.id" :value="store.id">
-              {{ store.name }} (#{{ store.id }})
             </option>
           </select></label
         ><label
@@ -356,10 +345,6 @@ onMounted(() => {
             maxlength="200"
             placeholder="按商品名称搜索"
             aria-label="商品名称" /></label
-        ><select v-model="query.headquarters" aria-label="仓库范围">
-          <option value="">全部仓库</option>
-          <option value="true">总部仓</option>
-          <option value="false">门店仓</option></select
         ><label class="inventory-low-filter"
           >可用库存 ≤
           <input
@@ -385,7 +370,6 @@ onMounted(() => {
           <thead>
             <tr>
               <th>商品</th>
-              <th>仓库</th>
               <th>实物库存</th>
               <th>订单锁定</th>
               <th>可用库存</th>
@@ -398,10 +382,6 @@ onMounted(() => {
               <td>
                 <strong>{{ row.productName }}</strong
                 ><small>商品 #{{ row.productId }} · 库存档案 #{{ row.id }}</small>
-              </td>
-              <td>
-                {{ row.storeName
-                }}<small>{{ row.storeId ? `门店 #${row.storeId}` : '总部仓' }}</small>
               </td>
               <td>{{ row.quantity }}</td>
               <td>{{ row.lockedQuantity }}</td>
@@ -427,7 +407,7 @@ onMounted(() => {
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td colspan="7" class="empty-state">
+              <td colspan="6" class="empty-state">
                 {{ loading ? '正在加载库存…' : error ? '加载失败，请重试' : '暂无库存记录' }}
               </td>
             </tr>
@@ -498,7 +478,7 @@ onMounted(() => {
               <td>
                 商品 #{{ log.productId
                 }}<small
-                  >{{ log.storeId ? `门店 #${log.storeId}` : '总部仓' }} · 档案 #{{
+                  >档案 #{{
                     log.inventoryId || '—'
                   }}</small
                 >

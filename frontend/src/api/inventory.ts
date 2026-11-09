@@ -5,8 +5,6 @@ export interface InventoryRow {
   id: string
   productId: string
   productName: string
-  storeId: string | null
-  storeName: string
   quantity: number
   lockedQuantity: number
   availableQuantity: number
@@ -18,7 +16,6 @@ export interface InventoryLog {
   id: string
   inventoryId: string | null
   productId: string
-  storeId: string | null
   changeType: string
   changeQuantity: number
   quantityBefore: number | null
@@ -35,7 +32,6 @@ export interface InventoryQuery {
   page: number
   size: number
   keyword: string
-  headquarters: string
   availableMax: string
 }
 export interface InventoryLogQuery {
@@ -47,7 +43,6 @@ export interface InventoryLogQuery {
 }
 export interface InventoryOptions {
   products: { id: string; name: string }[]
-  stores: { id: string; name: string }[]
 }
 export interface InventoryMutation {
   quantity: number
@@ -67,7 +62,7 @@ export const inventoryApi = {
     request<PageResult<InventoryRow>>(`/admin/inventory?${params(query)}`),
   logs: (query: InventoryLogQuery) =>
     request<PageResult<InventoryLog>>(`/admin/inventory/logs?${params(query)}`),
-  create: (input: { productId: string; storeId: string | null } & InventoryMutation) =>
+  create: (input: { productId: string } & InventoryMutation) =>
     request<InventoryLog>('/admin/inventory', { method: 'POST', body: JSON.stringify(input) }),
   inbound: (id: string, input: InventoryMutation) =>
     request<InventoryLog>(`/admin/inventory/${encodeURIComponent(id)}/inbound`, {

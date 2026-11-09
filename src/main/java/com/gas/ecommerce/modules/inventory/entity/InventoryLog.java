@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
  */
 @Data @EqualsAndHashCode(callSuper = true) @TableName("inventory_log")
 public class InventoryLog extends BaseEntity {
-    private Long productId; private Long storeId; private Integer changeQuantity;
+    private Long productId;  private Integer changeQuantity;
     private String changeType; private String referenceNo; private String remark;
     private Long inventoryId; private Long operatorId; private String requestId;
     private Integer requestedQuantity; private Integer quantityBefore; private Integer quantityAfter;

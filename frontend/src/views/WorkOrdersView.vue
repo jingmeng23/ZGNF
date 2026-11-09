@@ -3,7 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { addressesApi } from '../api/addresses'
 import { userWorkOrdersApi, workOrderStatuses, workOrderTypes, type WorkOrderRecord } from '../api/workOrders'
 const rows=ref<WorkOrderRecord[]>([]), addresses=ref<any[]>([]), selected=ref<WorkOrderRecord|null>(null), error=ref(''), busy=ref(false)
-const form=reactive({type:String(location.hash.match(/type=([^&]+)/)?.[1]||'repair'),title:'',description:'',addressId:'',appointmentTime:'',storeId:null as string|null,requestId:crypto.randomUUID()})
+const form=reactive({type:String(location.hash.match(/type=([^&]+)/)?.[1]||'repair'),title:'',description:'',addressId:'',appointmentTime:'',requestId:crypto.randomUUID()})
 const q=reactive({page:1,size:10,keyword:'',status:'',type:''})
 async function load(){ try{ const r=await userWorkOrdersApi.list(q); rows.value=r.list }catch(e){error.value=e instanceof Error?e.message:'加载失败'} }
 async function submit(){ if(!form.addressId||!form.title||!form.description||!form.appointmentTime){error.value='请完整填写预约信息';return}; busy.value=true; try{ selected.value=await userWorkOrdersApi.create({...form,appointmentTime:form.appointmentTime.replace('T',' ')}); await load(); form.requestId=crypto.randomUUID(); error.value='' }catch(e){error.value=e instanceof Error?e.message:'提交失败'}finally{busy.value=false} }

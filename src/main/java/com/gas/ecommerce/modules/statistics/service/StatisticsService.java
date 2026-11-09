@@ -88,11 +88,6 @@ public class StatisticsService {
         return db.query("SELECT i.product_id,MAX(i.product_name) AS name,COUNT(DISTINCT i.order_id) AS orders,SUM(i.quantity) AS quantity,SUM(i.amount) AS amount FROM order_item i JOIN `order` o ON o.id=i.order_id AND o.is_deleted=0 WHERE i.is_deleted=0 AND EXISTS (SELECT 1"+RECEIPTS+" AND p.order_id=i.order_id AND p.paid_time>=? AND p.paid_time<?) GROUP BY i.product_id ORDER BY quantity DESC,i.product_id ASC LIMIT ?",
                 (rs,n)->new ProductSales(rs.getLong("product_id"),rs.getString("name"),rs.getLong("orders"),rs.getLong("quantity"),rs.getBigDecimal("amount")),r.from(),r.to(),q.getLimit());
     }
-    public List<StoreServices> stores(StatisticsQuery q) {
-        Range r=range(q);
-        return db.query("SELECT w.store_id,COALESCE(s.name,'未分配门店') AS name,SUM(CASE WHEN w.create_time>=? AND w.create_time<? THEN 1 ELSE 0 END) AS created,SUM(CASE WHEN w.status='completed' AND w.completed_time>=? AND w.completed_time<? THEN 1 ELSE 0 END) AS completed,SUM(CASE WHEN w.status IN ('pending','accepted','processing') THEN 1 ELSE 0 END) AS open FROM work_order w LEFT JOIN store s ON s.id=w.store_id WHERE w.is_deleted=0 GROUP BY w.store_id,s.name ORDER BY completed DESC,created DESC,w.store_id ASC LIMIT ?",
-                (rs,n)->new StoreServices(rs.getObject("store_id",Long.class),rs.getString("name"),rs.getLong("created"),rs.getLong("completed"),rs.getLong("open")),r.from(),r.to(),r.from(),r.to(),q.getLimit());
-    }
     public String exportDaily(StatisticsQuery q) {
         StringBuilder csv=new StringBuilder("\uFEFFdate,created_orders,paid_orders,received_amount,refunded_orders,refund_amount,net_received_amount,new_customers\r\n");
         for(Daily day:trend(q)) {Metrics m=day.metrics();csv.append(day.date()).append(',').append(m.createdOrders()).append(',').append(m.paidOrders()).append(',').append(m.receivedAmount()).append(',').append(m.refundedOrders()).append(',').append(m.refundAmount()).append(',').append(m.netReceivedAmount()).append(',').append(m.newCustomers()).append("\r\n");}

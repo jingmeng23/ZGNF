@@ -11,13 +11,12 @@ function mockFetch() {
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-it('connects stock filters, including zero available stock and headquarters=false', async () => {
+it('connects stock filters, including zero available stock', async () => {
   const fetchMock = mockFetch()
   await inventoryApi.list({
     page: 2,
     size: 10,
     keyword: '燃气 & 灶',
-    headquarters: 'false',
     availableMax: '0',
   })
   const url = new URL(fetchMock.mock.calls[0][0], 'http://localhost')
@@ -26,13 +25,12 @@ it('connects stock filters, including zero available stock and headquarters=fals
     page: '2',
     size: '10',
     keyword: '燃气 & 灶',
-    headquarters: 'false',
     availableMax: '0',
   })
 })
 it('omits unset optional filters and loads inventory selectors', async () => {
   const fetchMock = mockFetch()
-  await inventoryApi.list({ page: 1, size: 20, keyword: '', headquarters: '', availableMax: '' })
+  await inventoryApi.list({ page: 1, size: 20, keyword: '', availableMax: '' })
   await inventoryApi.options()
   await inventoryApi.detail('9007199254740993')
   expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/admin/inventory?page=1&size=20')
@@ -42,14 +40,13 @@ it('omits unset optional filters and loads inventory selectors', async () => {
 it('keeps Long identifiers as strings and sends server audit fields on each mutation', async () => {
   const fetchMock = mockFetch()
   const input = { quantity: 3, requestId: 'stock-request', remark: '采购入库' }
-  await inventoryApi.create({ ...input, productId: '9007199254740993', storeId: null })
+  await inventoryApi.create({ ...input, productId: '9007199254740993' })
   await inventoryApi.inbound('9007199254740995', input)
   await inventoryApi.outbound('9007199254740995', input)
   await inventoryApi.adjust('9007199254740995', { ...input, quantity: 0 })
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
     ...input,
     productId: '9007199254740993',
-    storeId: null,
   })
   for (const [index, action] of ['inbound', 'outbound', 'adjust'].entries()) {
     expect(fetchMock.mock.calls[index + 1][0]).toBe(

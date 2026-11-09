@@ -90,7 +90,7 @@ try {
   assert(await evaluate(`document.querySelector('tbody').textContent.includes('智能燃气灶')`))
   await evaluate(`document.querySelector('.filter-control select').value = '安全配件'; document.querySelector('.filter-control select').dispatchEvent(new Event('change', { bubbles: true }))`)
   await until(() => evaluate(`document.querySelectorAll('tbody tr').length === 2`), 'category filter')
-  const moduleNames = { inventory: '库存管理', 'work-orders': '服务工单', aftersales: '售后管理', coupons: '优惠券', stores: '门店管理', employees: '员工管理', roles: '角色权限', logs: '操作日志', config: '系统配置' }
+  const moduleNames = { inventory: '库存管理', 'work-orders': '服务工单', aftersales: '售后管理', coupons: '优惠券', employees: '员工管理', roles: '角色权限', logs: '操作日志', config: '系统配置' }
   for (const [path, title] of Object.entries(moduleNames)) await navigate(`/admin/${path}`, title)
   await navigate('/admin/login', '登录运营管理平台')
   assert.equal(await evaluate(`document.querySelectorAll('.admin-sidebar').length`), 0)

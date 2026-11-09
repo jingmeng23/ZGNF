@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 public class WorkOrderController {
     private final WorkOrderService service;
     public WorkOrderController(WorkOrderService service) { this.service=service; }
-    @GetMapping("/stores") public Result<java.util.List<WorkOrderOptionsVO.StoreOption>> stores() {return Result.success(service.stores());}
     @PostMapping public Result<WorkOrderVO> create(@Valid @RequestBody WorkOrderCreateRequest r) {return Result.success(service.create(SecurityUtils.currentUserId(),r));}
     @GetMapping public Result<PageResult<WorkOrderVO>> list(@Valid @ModelAttribute WorkOrderQuery q) {return Result.success(service.listMine(SecurityUtils.currentUserId(),q));}
     @GetMapping("/{id}") public Result<WorkOrderVO> detail(@PathVariable Long id) {return Result.success(service.detail(SecurityUtils.currentUserId(),id));}

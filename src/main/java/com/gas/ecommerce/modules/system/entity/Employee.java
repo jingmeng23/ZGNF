@@ -9,7 +9,6 @@ import lombok.EqualsAndHashCode;
 @Data @EqualsAndHashCode(callSuper = true) @TableName("employee") public class Employee extends BaseEntity {
     private Long departmentId;
     private Long positionId;
-    private Long storeId;
     private String name;
     private String username;
     private String passwordHash;

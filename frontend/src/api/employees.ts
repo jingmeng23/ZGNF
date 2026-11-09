@@ -5,12 +5,12 @@ export interface EmployeeInput {
   username: string
   name: string
   phone: string
-  storeId: string | null
   departmentId: string | null
   positionId: string | null
   status: 'active' | 'inactive'
 }
 export interface EmployeeRecord extends EmployeeInput {
+  phoneUnavailable?: boolean
   id: string
   roleIds: string[]
   createTime: string
@@ -18,7 +18,6 @@ export interface EmployeeRecord extends EmployeeInput {
 }
 export interface OrganizationOption { id: string; name: string; status: string }
 export interface EmployeeOptions {
-  stores: OrganizationOption[]
   departments: OrganizationOption[]
   positions: OrganizationOption[]
   roles: OrganizationOption[]
@@ -27,7 +26,7 @@ export interface EmployeeOptions {
   currentEmployeeId: string
 }
 export interface EmployeeQuery {
-  page: number; size: number; keyword: string; status: string; storeId: string; roleId: string
+  page: number; size: number; keyword: string; status: string; roleId: string
 }
 const root = '/admin/employees'
 const path = (id: string) => `${root}/${encodeURIComponent(id)}`

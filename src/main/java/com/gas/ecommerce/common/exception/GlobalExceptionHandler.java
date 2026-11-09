@@ -18,6 +18,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 异常或错误码类型，用于统一表达程序处理失败的原因。
  */
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> notFound(Exception ex) { return Result.of(404, "接口不存在", null); }
     @ExceptionHandler(com.gas.ecommerce.modules.user.service.AddressDuplicateException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public Result<Void> duplicateAddress(com.gas.ecommerce.modules.user.service.AddressDuplicateException ex) {

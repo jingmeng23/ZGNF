@@ -9,8 +9,6 @@ import lombok.EqualsAndHashCode;
 public class InventoryLogQuery extends PageRequest {
     @Positive private Long inventoryId;
     @Positive private Long productId;
-    @Positive private Long storeId;
-    private Boolean headquarters;
     @Pattern(regexp="initial|inbound|outbound|adjustment|order_lock|order_release|order_deduct") private String changeType;
     @Size(max=64) private String referenceNo;
     @Positive private Long operatorId;

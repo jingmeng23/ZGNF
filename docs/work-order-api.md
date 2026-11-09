@@ -21,14 +21,13 @@
   "type":"repair",
   "title":"燃气灶维修",
   "description":"点火失败，请上门检查",
-  "storeId":1,
   "addressId":10,
   "appointmentTime":"2026-11-01 10:00:00",
   "requestId":"service-20261101-001"
 }
 ```
 
-storeId 可选，填写时须为有效门店。addressId 必须属于当前用户。预约时间必须晚于当前时间；title 必填且最多 200 字，description 必填且最多 5000 字。requestId 为 1 至 64 位字母、数字、下划线或连字符，同一用户重复提交相同编号返回原工单，不重复生成日志。请求仍须通过参数验证。
+addressId 必须属于当前用户。预约时间必须晚于当前时间；title 必填且最多 200 字，description 必填且最多 5000 字。requestId 为 1 至 64 位字母、数字、下划线或连字符，同一用户重复提交相同编号返回原工单，不重复生成日志。请求仍须通过参数验证。
 
 创建时保存服务地址快照，手机号在数据库中保持加密。后续修改或删除地址不改变工单服务地址。工单编号使用 WO 前缀和 UUID，不依赖 Redis。
 
@@ -47,25 +46,25 @@ storeId 可选，填写时须为有效门店。addressId 必须属于当前用�
 | PUT | `/api/v1/admin/work-orders/{id}/start` | workorder:process | 指派员工开始处理 |
 | PUT | `/api/v1/admin/work-orders/{id}/complete` | workorder:process | 指派员工提交处理结果并完结 |
 
-workorder:read 为全部工单及服务地址的读取权限，应授予需要全局调度的人员。处理权限本身不授予全局查询权限。start/complete 还校验当前员工确为该工单指派员工、账号及门店有效且归属一致。
+workorder:read 为全部工单及服务地址的读取权限，应授予需要全局调度的人员。处理权限本身不授予全局查询权限。start/complete 还校验当前员工确为该工单指派员工、账号有效且具有处理权限。
 
 派单请求：
 
 ```json
-{"storeId":1,"employeeId":7,"remark":"安排维修人员上门"}
+{"employeeId":7,"remark":"安排维修人员上门"}
 ```
 
-门店、员工均须有效，员工必须属于该门店并已获得 workorder:process 权限。remark 必填，最多 800 字。仅 pending/accepted 可派单或改派，允许调度到另一有效门店。派单后进入 accepted。重复派给同一门店、同一员工不重复记录。
+员工须有效且已获得 workorder:process 权限。remark 必填，最多 800 字。仅 pending/accepted 可派单或改派，允许改派给另一有处理权限的员工。派单后进入 accepted。重复派给同一员工不重复记录。
 
 开始和完结请求均为 `{"remark":"处理说明或最终服务结果"}`，必填且最多 1000 字。重复开始处理不重复记录；完结重试须提交相同结果，不允许修改已完结工单。
 
 ## 查询与返回字段
 
-工单列表支持 page（默认 1）、size（默认 20、上限 100）、status、type、keyword（匹配标题或工单号）、storeId、employeeId。sort 白名单为 createTime/updateTime/appointmentTime，order 为 asc/desc。用户列表始终附加本人条件，传入其他筛选项不会扩大可见范围。
+工单列表支持 page（默认 1）、size（默认 20、上限 100）、status、type、keyword（匹配标题或工单号）、employeeId。sort 白名单为 createTime/updateTime/appointmentTime，order 为 asc/desc。用户列表始终附加本人条件，传入其他筛选项不会扩大可见范围。
 
 日志接口支持 page、size。分页返回 list、total、page、size、pages。
 
-工单返回 id、workOrderNo、userId、storeId、employeeId、title、description、type、status、address、appointmentTime、acceptedTime、startedTime、completedTime、result、createTime、updateTime。日志含 id、operatorId、operatorType（user/employee）、action、content、createTime；旧日志 operatorType 可为空。
+工单返回 id、workOrderNo、userId、employeeId、title、description、type、status、address、appointmentTime、acceptedTime、startedTime、completedTime、result、createTime、updateTime。日志含 id、operatorId、operatorType（user/employee）、action、content、createTime；旧日志 operatorType 可为空。
 
 ## 状态和一致性
 
@@ -80,7 +79,7 @@ stateDiagram-v2
     accepted --> cancelled: 用户取消
 ```
 
-业务状态与工单日志在同一数据库事务中提交。组织事务锁和工单行锁串行化派单、处理与取消，避免并发覆盖。accepted/processing 工单关联的门店、员工和处理权限不可被组织管理接口变更为无效，需先改派、取消或完结。processing 工单须先完结，不能改派。工单和操作日志保留作为服务记录，不开放删除和任意状态修改接口。
+业务状态与工单日志在同一数据库事务中提交。组织事务锁和工单行锁串行化派单、处理与取消，避免并发覆盖。accepted/processing 工单关联的员工和处理权限不可被组织管理接口变更为无效，需先改派、取消或完结。processing 工单须先完结，不能改派。工单和操作日志保留作为服务记录，不开放删除和任意状态修改接口。
 
 数据库新增迁移 `V1.8__work_order_workflow.sql`，包含预约地址快照、员工指派、时间、完工结果、提交请求唯一索引及三项权限；内置 admin 角色自动获得权限，自定义角色需配置。旧工单新增字段为空，接口兼容展示；旧 pending/accepted 工单可派单，旧 processing 且无员工的异常记录需在上线前按实际业务补齐指派信息。
 

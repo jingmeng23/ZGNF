@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = {"/db/migration/V1.0__init_schema.sql", "/db/migration/V1.1__admin_roles.sql",
         "/db/migration/V1.2__order_reservations.sql", "/db/migration/V1.3__aftersale_workflow.sql",
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
-        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.26__address_coordinate_system.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql"})
+        "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.26__address_coordinate_system.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql", "/db/migration/V1.28__remove_store_management.sql"})
 class AdminCatalogIntegrationTests {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
@@ -1488,14 +1488,9 @@ class AdminCatalogIntegrationTests {
 
     @Autowired com.gas.ecommerce.modules.workorder.service.WorkOrderService workOrders;
 
-    long workStore() {
-        db.update("INSERT INTO store(id,name,status) VALUES(900,'Service store','active'),(901,'Other store','active')");
-        db.update("UPDATE employee SET store_id=900 WHERE id=7");
-        return 900;
-    }
     String workBody(long address,String request) throws Exception {
         return json.writeValueAsString(Map.of("addressId",address,"requestId",request,"type","repair","title","Repair stove",
-                "description","Ignition fails","appointmentTime",java.time.LocalDateTime.now().plusDays(1).withNano(0),"storeId",900));
+                "description","Ignition fails","appointmentTime",java.time.LocalDateTime.now().plusDays(1).withNano(0)));
     }
     long createWork(String request) throws Exception {
         long address=createAddress(userBearer,"13800138000",true);
@@ -1505,14 +1500,14 @@ class AdminCatalogIntegrationTests {
     }
     void assignWork(long id) throws Exception {
         mvc.perform(put("/api/v1/admin/work-orders/"+id+"/assign").header("Authorization",bearer).contentType("application/json")
-                .content("{\"storeId\":900,\"employeeId\":7,\"remark\":\"dispatch\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("accepted"));
+                .content("{\"employeeId\":7,\"remark\":\"dispatch\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("accepted"));
     }
     void workAction(long id,String action,String token,int expected) throws Exception {
         mvc.perform(put("/api/v1/admin/work-orders/"+id+"/"+action).header("Authorization",token)
                 .contentType("application/json").content("{\"remark\":\"service result\"}")).andExpect(status().is(expected));
     }
     @Test void workOrderLifecycleSnapshotsAndLogsAreConsistent() throws Exception {
-        workStore(); long id=createWork("work-flow");
+        long id=createWork("work-flow");
         String snapshot=db.queryForObject("SELECT address_snapshot FROM work_order WHERE id=?",String.class,id);
         assertFalse(snapshot.contains("13800138000"));
         db.update("UPDATE user_address SET detail='changed' WHERE user_id=100");
@@ -1531,7 +1526,7 @@ class AdminCatalogIntegrationTests {
         workAction(id,"start",bearer,400);
     }
     @Test void workOrderOwnershipAndInputValidationAreEnforced() throws Exception {
-        workStore(); long id=createWork("work-access");
+        long id=createWork("work-access");
         for(String path:new String[]{"/api/v1/work-orders/"+id,"/api/v1/work-orders/"+id+"/logs"})
             mvc.perform(get(path).header("Authorization",secondUserBearer)).andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/work-orders").header("Authorization",secondUserBearer)).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
@@ -1539,7 +1534,7 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get("/api/v1/admin/work-orders").header("Authorization",userBearer)).andExpect(status().isForbidden());
         mvc.perform(post("/api/v1/work-orders").header("Authorization",userBearer).contentType("application/json").content("{}" )).andExpect(status().isBadRequest());
         mvc.perform(get("/api/v1/work-orders").header("Authorization",userBearer).param("status","bad")).andExpect(status().isBadRequest());
-        mvc.perform(get("/api/v1/admin/work-orders").header("Authorization",bearer).param("sort","appointmentTime").param("keyword","Repair").param("storeId","900"))
+        mvc.perform(get("/api/v1/admin/work-orders").header("Authorization",bearer).param("sort","appointmentTime").param("keyword","Repair"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
         long otherAddress=createAddress(secondUserBearer,"13800138001",false);
         mvc.perform(post("/api/v1/work-orders").header("Authorization",userBearer).contentType("application/json").content(workBody(otherAddress,"bad-address"))).andExpect(status().isBadRequest());
@@ -1547,33 +1542,33 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get("/api/v1/work-orders").header("Authorization",userBearer)).andExpect(status().isBadRequest());
     }
     @Test void workOrderCancellationIsIdempotentAndTerminal() throws Exception {
-        workStore(); long id=createWork("work-cancel"); assignWork(id);
+        long id=createWork("work-cancel"); assignWork(id);
         for(int i=0;i<2;i++) mvc.perform(put("/api/v1/work-orders/"+id+"/cancel").header("Authorization",userBearer)
                 .contentType("application/json").content("{\"remark\":\"cancel\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("cancelled"));
         assertEquals(3,db.queryForObject("SELECT COUNT(*) FROM work_order_log WHERE work_order_id=?",Integer.class,id));
         workAction(id,"start",bearer,400); workAction(id,"complete",bearer,400);
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workOrders.assign(7L,id,
-                new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(900L,7L,"late dispatch")));
+                new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(7L,"late dispatch")));
     }
-    @Test void workOrderAssignmentRejectsWrongStoreAndUnauthorizedEmployee() throws Exception {
-        workStore(); long id=createWork("work-assignment");
-        db.update("INSERT INTO employee(id,username,password_hash,status,store_id) VALUES(8,'tech8','unused','active',900)");
-        var r=new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(901L,7L,"wrong store");
+    @Test void workOrderAssignmentRejectsMissingAndUnauthorizedEmployee() throws Exception {
+        long id=createWork("work-assignment");
+        db.update("INSERT INTO employee(id,username,password_hash,status) VALUES(8,'tech8','unused','active')");
+        var r=new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(99999L,"missing employee");
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workOrders.assign(7L,id,r));
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workOrders.assign(7L,id,
-                new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(900L,8L,"no permission")));
+                new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(8L,"no permission")));
         assignWork(id);
         db.update("INSERT INTO employee_role(employee_id,role_id) SELECT 8,id FROM role WHERE role_key='admin'");
         String tech="Bearer "+tokens.generateAccessToken(8L,"admin");
         workAction(id,"start",tech,403);
-        workOrders.assign(7L,id,new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(900L,8L,"reassign"));
+        workOrders.assign(7L,id,new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(8L,"reassign"));
         workAction(id,"start",bearer,403); workAction(id,"start",tech,200); workAction(id,"complete",tech,200);
         mvc.perform(put("/api/v1/admin/work-orders/"+id+"/complete").header("Authorization",tech)
                 .contentType("application/json").content("{\"remark\":\"different result\"}")).andExpect(status().isBadRequest());
     }
     @Test void workOrderConcurrentSubmissionCreatesOneRecordAndOneLog() throws Exception {
-        workStore(); long address=createAddress(userBearer,"13800138000",true);
-        var r=new com.gas.ecommerce.modules.workorder.dto.WorkOrderCreateRequest("inspection","check","annual check",900L,address,java.time.LocalDateTime.now().plusDays(1),"concurrent-work");
+        long address=createAddress(userBearer,"13800138000",true);
+        var r=new com.gas.ecommerce.modules.workorder.dto.WorkOrderCreateRequest("inspection","check","annual check",address,java.time.LocalDateTime.now().plusDays(1),"concurrent-work");
         try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
             var start=new java.util.concurrent.CountDownLatch(1);
             var a=pool.submit(()->{start.await();return workOrders.create(100L,r).id();});
@@ -1584,7 +1579,7 @@ class AdminCatalogIntegrationTests {
         assertEquals(1,db.queryForObject("SELECT COUNT(*) FROM work_order_log",Integer.class));
     }
     @Test void workOrderConcurrentStartAndCancellationCannotBothSucceed() throws Exception {
-        workStore(); long id=createWork("work-race"); assignWork(id);
+        long id=createWork("work-race"); assignWork(id);
         var remark=new com.gas.ecommerce.modules.workorder.dto.WorkOrderActionRequest("race");
         try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
             var start=new java.util.concurrent.CountDownLatch(1);
@@ -1596,28 +1591,24 @@ class AdminCatalogIntegrationTests {
     }
 
     @Test void workOrderPermissionsAndOrganizationChangesRespectOpenAssignments() throws Exception {
-        workStore(); long id=createWork("work-organization");
-        db.update("INSERT INTO employee(id,username,password_hash,status,store_id) VALUES(8,'technician','unused','active',900)");
+        long id=createWork("work-organization");
+        db.update("INSERT INTO employee(id,username,password_hash,status) VALUES(8,'technician','unused','active')");
         db.update("INSERT INTO role(id,name,role_key,status) VALUES(900,'Technician','technician','active')");
         db.update("INSERT INTO employee_role(employee_id,role_id) VALUES(8,900)");
         db.update("INSERT INTO role_permission(role_id,permission_id) SELECT 900,id FROM permission WHERE permission_key='workorder:process'");
-        workOrders.assign(7L,id,new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(900L,8L,"dispatch"));
+        workOrders.assign(7L,id,new com.gas.ecommerce.modules.workorder.dto.WorkOrderAssignRequest(8L,"dispatch"));
         String tech="Bearer "+tokens.generateAccessToken(8L,"admin");
         mvc.perform(get("/api/v1/admin/work-orders").header("Authorization",tech)).andExpect(status().isForbidden());
         mvc.perform(put("/api/v1/admin/work-orders/"+id+"/assign").header("Authorization",tech).contentType("application/json")
-                .content("{\"storeId\":900,\"employeeId\":8,\"remark\":\"dispatch\"}")).andExpect(status().isForbidden());
+                .content("{\"employeeId\":8,\"remark\":\"dispatch\"}")).andExpect(status().isForbidden());
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workManagement.assignPermissions(900L,
                 new com.gas.ecommerce.modules.system.dto.AssignmentRequest(java.util.List.of())));
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workManagement.updateEmployee(8L,
-                new com.gas.ecommerce.modules.system.dto.EmployeeRequest("technician","Tech","13800138000",901L,null,null,"active")));
+                new com.gas.ecommerce.modules.system.dto.EmployeeRequest("technician","Tech","13800138000",null,null,"inactive")));
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workManagement.deleteEmployee(8L));
-        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->workManagement.saveStore(900L,
-                new com.gas.ecommerce.modules.system.dto.StoreRequest("Service store","13800138000","P","C","D","A",null,"inactive")));
-        assertEquals(900L,db.queryForObject("SELECT store_id FROM employee WHERE id=8",Long.class));
-        assertEquals("active",db.queryForObject("SELECT status FROM store WHERE id=900",String.class));
         workAction(id,"start",tech,200); workAction(id,"complete",tech,200);
         workManagement.assignPermissions(900L,new com.gas.ecommerce.modules.system.dto.AssignmentRequest(java.util.List.of()));
-        workManagement.updateEmployee(8L,new com.gas.ecommerce.modules.system.dto.EmployeeRequest("technician","Tech","13800138000",901L,null,null,"active"));
+        workManagement.updateEmployee(8L,new com.gas.ecommerce.modules.system.dto.EmployeeRequest("technician","Tech","13800138000",null,null,"active"));
     }
     @Autowired com.gas.ecommerce.modules.system.service.OrganizationManagementService workManagement;
 
@@ -1669,17 +1660,6 @@ class AdminCatalogIntegrationTests {
                 .andExpect(jsonPath("$.data[0].quantity").value(2)).andExpect(jsonPath("$.data[0].paidOrders").value(1))
                 .andExpect(jsonPath("$.data[0].merchandiseAmount").value(100));
     }
-    @Test void statisticsStoresUseCreationAndCompletionDatesAndCurrentBacklog() throws Exception {
-        db.update("INSERT INTO store(id,name) VALUES(700,'Statistics store')");
-        db.update("INSERT INTO work_order(work_order_no,user_id,store_id,type,status,title,create_time,completed_time,appointment_time) VALUES('SW-1',100,700,'inspection','completed','done','2026-03-01 10:00:00','2026-03-02 12:00:00',null),('SW-2',100,700,'inspection','accepted','open','2026-03-02 10:00:00',null,'2020-01-01 10:00:00'),('SW-3',100,null,'inspection','pending','unassigned','2026-03-02 10:00:00',null,null)");
-        mvc.perform(statisticsGet("/stores","2026-03-02","2026-03-02")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].storeId").value("700"))
-                .andExpect(jsonPath("$.data[0].createdWorkOrders").value(1))
-                .andExpect(jsonPath("$.data[0].completedWorkOrders").value(1))
-                .andExpect(jsonPath("$.data[0].openWorkOrders").value(1));
-        mvc.perform(statisticsGet("/overview","2026-03-02","2026-03-02")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.pendingWorkOrders").value(2)).andExpect(jsonPath("$.data.overdueWorkOrders").value(1));
-    }
     @Test void statisticsExportContainsAllDatesAndMatchesAmounts() throws Exception {
         seedStatistics();
         var response=mvc.perform(statisticsGet("/reports/daily/export","2026-03-02","2026-03-04").param("size","1"))
@@ -1707,15 +1687,13 @@ class AdminCatalogIntegrationTests {
     @Autowired com.gas.ecommerce.modules.inventory.service.InventoryService inventoryService;
     @Test void inventorySelectorsUseInventoryPermissionAndExcludeUnavailableReferences() throws Exception {
         long p=product(category(0,"Inventory selectors"));
-        db.update("INSERT INTO store(id,name,status,is_deleted) VALUES(700,'Active store','active',0),(701,'Disabled store','inactive',0),(702,'Deleted store','active',1)");
         long deleted=product(category(0,"Deleted selector"));
         db.update("UPDATE product SET is_deleted=1 WHERE id=?",deleted);
-        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key IN ('product:read','store:read'))");
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key IN ('product:read'))");
         mvc.perform(get("/api/v1/admin/inventory/options").header("Authorization",bearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.products.length()").value(1))
                 .andExpect(jsonPath("$.data.products[0].id").value(Long.toString(p)))
-                .andExpect(jsonPath("$.data.stores.length()").value(1))
-                .andExpect(jsonPath("$.data.stores[0].id").value("700"));
+                .andExpect(jsonPath("$.data.stores").doesNotExist());
         mvc.perform(get("/api/v1/admin/inventory/options").header("Authorization",userBearer)).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/admin/inventory/options")).andExpect(status().isUnauthorized());
         db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='inventory:read')");
@@ -1723,7 +1701,7 @@ class AdminCatalogIntegrationTests {
     }
     private long inventoryStock(int quantity) throws Exception {
         long p=product(category(0,"Stock"));
-        return inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,null,quantity,"stock-create","opening")).inventoryId();
+        return inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,quantity,"stock-create","opening")).inventoryId();
     }
     private com.gas.ecommerce.modules.inventory.dto.InventoryChangeRequest stockChange(int quantity,String key) {
         return new com.gas.ecommerce.modules.inventory.dto.InventoryChangeRequest(quantity,key,"stock operation");
@@ -1751,8 +1729,7 @@ class AdminCatalogIntegrationTests {
     @Test void inventoryRejectsOverflowDuplicateLocationAndInvalidReferences() throws Exception {
         long id=inventoryStock(Integer.MAX_VALUE);long p=inventoryService.detail(id).productId();
         assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->inventoryService.inbound(7L,id,stockChange(1,"overflow")));
-        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,null,0,"duplicate","opening")));
-        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,999L,0,"missing-store","opening")));
+        assertThrows(com.gas.ecommerce.common.exception.BusinessException.class,()->inventoryService.create(7L,new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,0,"duplicate","opening")));
         mvc.perform(delete("/api/v1/admin/products/"+p).header("Authorization",bearer)).andExpect(status().isBadRequest());
         assertEquals(Integer.MAX_VALUE,inventoryService.detail(id).quantity());
     }
@@ -1761,9 +1738,8 @@ class AdminCatalogIntegrationTests {
         mvc.perform(get(url).header("Authorization",userBearer)).andExpect(status().isForbidden());
         db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='inventory:write')");
         mvc.perform(post(url+"/"+id+"/inbound").header("Authorization",bearer).contentType("application/json").content("{\"quantity\":1,\"requestId\":\"http\",\"remark\":\"receive\"}")).andExpect(status().isForbidden());
-        mvc.perform(get(url).header("Authorization",bearer).param("headquarters","true").param("availableMax","10")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
+        mvc.perform(get(url).header("Authorization",bearer).param("availableMax","10")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
         mvc.perform(get(url).header("Authorization",bearer).param("availableMax","9")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(0));
-        mvc.perform(get(url).header("Authorization",bearer).param("headquarters","true").param("storeId","1")).andExpect(status().isBadRequest());
         mvc.perform(get(url).header("Authorization",bearer).param("sort","bad SQL")).andExpect(status().isBadRequest());
         mvc.perform(get(url+"/logs").header("Authorization",bearer).param("inventoryId",Long.toString(id)).param("changeType","initial")).andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1));
     }
@@ -1809,7 +1785,7 @@ class AdminCatalogIntegrationTests {
     }
     @Test void inventoryConcurrentCreationProducesOneHeadquartersRow() throws Exception {
         long p=product(category(0,"Concurrent stock"));
-        var r=new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,null,0,"race-create","opening");
+        var r=new com.gas.ecommerce.modules.inventory.dto.InventoryCreateRequest(p,0,"race-create","opening");
         try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
             var start=new java.util.concurrent.CountDownLatch(1);
             var a=pool.submit(()->{start.await();return inventoryService.create(7L,r);});

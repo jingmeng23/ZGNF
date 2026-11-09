@@ -31,7 +31,7 @@
 | 模块 | 前端路由 | 前端实际调用 | 后端 API | 当前状态 / 后续工作 |
 |---|---|---|---|---|
 | 管理员认证 | `/admin/login` | 登录页复用 `POST /auth/sms-code`、`POST /auth/login` | `POST /admin/auth/login`、`GET /admin/auth/me` | **需核实对接**：后端有独立管理员登录接口；当前前端登录页走通用用户认证 API，应在管理员登录联调时统一认证协议。 |
-| 经营总览 | `/admin`；`AdminOverview.vue` | 静态展示，无统计 API 调用 | `GET /admin/statistics/overview`、`/trend`、`/products`、`/stores`、`/reports/daily`、`/reports/daily/export` | 后端统计接口存在；前端看板仍为演示数据，待接入真实统计。 |
+| 经营总览 | `/admin`；`AdminOverview.vue` | 静态展示，无统计 API 调用 | `GET /admin/statistics/overview`、`/trend`、`/products`、`/reports/daily`、`/reports/daily/export` | 后端统计接口存在；前端看板仍为演示数据，待接入真实统计。 |
 | 订单管理 | `/admin/orders` | `GET /admin/orders` 分页列表 | `GET /admin/orders`、`GET /admin/orders/{id}`、`PUT /admin/orders/{id}/process` | 列表已接入；详情和处理操作待接入。 |
 | 商品管理 | `/admin/products` | `GET /admin/products` 分页列表 | `GET/POST /admin/products`、`GET/PUT/DELETE /admin/products/{id}`、`PUT /admin/products/{id}/status` | 列表已接入；新增、编辑、删除和上下架操作待接入。 |
 | 分类管理 | `/admin/categories`；`AdminCategories.vue`、`src/api/categories.ts` | `GET /admin/categories/management`、`GET/PUT/DELETE /admin/categories/{id}`、`POST /admin/categories`、`PUT /admin/categories/{id}/status` | 同左；原 `GET /admin/categories` 保留兼容 | 树形展示、搜索筛选、增删改查、层级调整、排序、启停和直接商品统计跳转已连接。 |
@@ -39,7 +39,6 @@
 | 工单管理 | `/admin/work-orders` | `GET /admin/work-orders` 分页列表 | `GET /admin/work-orders`、`GET /{id}`、`GET /{id}/logs`、`PUT /{id}/assign`、`PUT /{id}/start`、`PUT /{id}/complete` | 列表已接入；分派、开始、完成和日志查看待接入。路径中的 `{id}` 均位于 `/admin/work-orders` 下。 |
 | 售后管理 | `/admin/aftersales` | `GET /admin/aftersales` 分页列表 | `GET /admin/aftersales`、`GET /{id}`、`PUT /{id}/review`、`PUT /{id}/complete` | 列表已接入；详情、审核和完成操作待接入。路径中的 `{id}` 均位于 `/admin/aftersales` 下。 |
 | 员工管理 | `/admin/employees` | `GET /admin/employees` 分页列表 | `GET/POST /admin/employees`、`GET/PUT/DELETE /admin/employees/{id}`、`PUT /admin/employees/{id}/password`、`PUT /admin/employees/{id}/roles` | 列表已接入；员工维护、密码重置和角色分配待接入。此处管理内部员工，不是顾客用户。 |
-| 门店管理 | `/admin/stores` | `GET /admin/stores` 分页列表 | `GET/POST /admin/stores`、`GET/PUT/DELETE /admin/stores/{id}` | 列表已接入；新增、编辑和删除待接入。 |
 | 角色权限 | `/admin/roles` | `GET /admin/roles` 分页列表 | `GET/POST /admin/roles`、`GET/PUT/DELETE /admin/roles/{id}`、`GET /admin/roles/permissions`、`PUT /admin/roles/{id}/permissions` | 列表已接入；角色及权限维护待接入。 |
 | 优惠券管理 | `/admin/coupons` | `GET /admin/coupons` 分页列表 | `GET/POST /admin/coupons`、`GET/PUT/DELETE /admin/coupons/{id}` | 列表已接入；优惠券维护待接入。 |
 | 操作日志 | `/admin/logs` | `GET /admin/logs` 分页列表 | `GET /admin/logs` | 列表查询已接入。 |

@@ -7,13 +7,13 @@ function mockFetch() {
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }
-const input: EmployeeInput = { username: 'technician', name: '服务员工', phone: '13800138000', storeId: '9007199254740993', departmentId: null, positionId: null, status: 'active' }
+const input: EmployeeInput = { username: 'technician', name: '服务员工', phone: '13800138000', departmentId: null, positionId: null, status: 'active' }
 it('sends paginated filters without blank parameters and encodes the keyword', async () => {
   const f = mockFetch()
-  await employeesApi.list({ page: 2, size: 20, keyword: '员工&甲', status: 'inactive', storeId: input.storeId!, roleId: '' })
+  await employeesApi.list({ page: 2, size: 20, keyword: '员工&甲', status: 'inactive', roleId: '' })
   const url = new URL(f.mock.calls[0][0], 'http://localhost')
   expect(url.pathname).toBe('/api/v1/admin/employees')
-  expect(Object.fromEntries(url.searchParams)).toEqual({ page: '2', size: '20', keyword: '员工&甲', status: 'inactive', storeId: '9007199254740993' })
+  expect(Object.fromEntries(url.searchParams)).toEqual({ page: '2', size: '20', keyword: '员工&甲', status: 'inactive' })
 })
 it('loads options and employee detail through the real employee resource', async () => {
   const f = mockFetch()

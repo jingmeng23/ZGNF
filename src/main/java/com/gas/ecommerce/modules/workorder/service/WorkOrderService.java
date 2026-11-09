@@ -15,7 +15,6 @@ import com.gas.ecommerce.modules.workorder.vo.WorkOrderVO;
  */
 public interface WorkOrderService extends IService<WorkOrder> {
     com.gas.ecommerce.modules.workorder.vo.WorkOrderOptionsVO options();
-    java.util.List<com.gas.ecommerce.modules.workorder.vo.WorkOrderOptionsVO.StoreOption> stores();
     PageResult<WorkOrderVO> listAssigned(Long employeeId,WorkOrderQuery q);
     WorkOrderVO detailAssigned(Long employeeId,Long id);
     PageResult<WorkOrderLogVO> logsAssigned(Long employeeId,Long id,PageRequest q);

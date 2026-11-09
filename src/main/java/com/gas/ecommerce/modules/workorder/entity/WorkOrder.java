@@ -11,7 +11,6 @@ import lombok.EqualsAndHashCode;
 public class WorkOrder extends BaseEntity {
     private String workOrderNo;
     private Long userId;
-    private Long storeId;
     private Long employeeId;
     private String requestId;
     private String type;

@@ -103,6 +103,6 @@ npm run format
 
 浏览器检查使用本机安装的 Edge 或 Chrome，无需下载浏览器。先运行 `npm run preview`，再执行 `npm run test:browser`。Windows 默认使用标准位置的 Edge；其他位置通过 `BROWSER_BIN` 指定。`SMOKE_BASE_URL` 可覆盖测试地址。测试会检查总览、全部业务路由、搜索、筛选、分页、详情、登录入口和移动布局，并生成被 Git 忽略的 `.screenshots/` 截图。
 
-## 后续 APP
+## Android APP
 
-保留现有 `capacitor.config.ts` 和 `app:*` 脚本。本次没有生成 Android/iOS 原生项目。APP 需要配置可从设备访问的 HTTPS API 地址、原生安全存储及移动端登录流程；`localhost` 指向设备自身。原生工程和 SDK 配置完成后再接入 Capacitor 平台插件并执行同步。
+Android 工程已在 `android/` 中生成，接入返回键、网络状态、启动页、状态栏和键盘插件。复制 `.env.android.example` 为 `.env.android.local` 并填写手机可访问的 API 地址后，运行 `npm run app:apk` 构建调试安装包，或 `npm run app:release` 构建正式签名 AAB。需要 JDK 21 和 Android SDK 35。完整配置、签名及验收步骤见 [Android 开发说明](../docs/android-app.md)。真实支付、推送及正式部署仍需实际商户和服务器配置。

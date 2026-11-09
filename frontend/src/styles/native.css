@@ -1,0 +1,43 @@
+.native-app {
+  overscroll-behavior-y: none;
+}
+.native-app body {
+  -webkit-tap-highlight-color: transparent;
+}
+.native-app .app-shell {
+  min-height: 100dvh;
+}
+.native-app input,
+.native-app select,
+.native-app textarea {
+  font-size: 16px;
+}
+.native-app .main {
+  padding-top: max(20px, env(safe-area-inset-top));
+}
+.native-app.app-offline body::before {
+  content: '当前网络不可用，请检查网络连接后重试';
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  padding: 10px 16px;
+  background: #fff1dc;
+  color: #80541a;
+  text-align: center;
+  font-size: 13px;
+}
+@media (max-width: 620px) {
+  .native-app .main {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom));
+  }
+  .native-app .bottom-nav {
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .native-app .bottom-nav a {
+    min-height: 44px;
+    min-width: 48px;
+    align-content: center;
+  }
+}

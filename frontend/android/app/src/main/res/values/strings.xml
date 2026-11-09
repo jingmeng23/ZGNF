@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">自贡能发</string>
+    <string name="title_activity_main">自贡能发</string>
+    <string name="package_name">com.zgnf.shop</string>
+    <string name="custom_url_scheme">com.zgnf.shop</string>
+</resources>

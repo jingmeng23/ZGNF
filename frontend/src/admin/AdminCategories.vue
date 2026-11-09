@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { Plus, RefreshCw, ChevronRight, ChevronDown } from 'lucide-vue-next'
+import {
+  Plus,
+  RefreshCw,
+  ChevronRight,
+  ChevronDown,
+  FolderTree,
+  Folder,
+  Search,
+  CheckCircle2,
+  CirclePause,
+  Layers3,
+} from 'lucide-vue-next'
 import {
   categoriesApi,
   categoryRows,
@@ -32,6 +43,14 @@ const excluded = computed(() =>
 )
 const parentOptions = computed(() => allRows.value.filter((row) => !excluded.value.has(row.id)))
 const readonly = computed(() => mode.value === 'detail')
+const activeCount = computed(() => rows.value.filter((row) => row.status === 'active').length)
+const rootCount = computed(() => rows.value.filter((row) => row.parentId === '0').length)
+const filtering = computed(() => !!(keyword.value.trim() || status.value))
+const matchedCount = computed(() => displayRows.value.filter((row) => !row.context).length)
+function resetFilters() {
+  keyword.value = ''
+  status.value = ''
+}
 let version = 0
 function explain(e: unknown) {
   return e instanceof ApiError && e.traceId
@@ -173,18 +192,45 @@ onUnmounted(() => {
   <div class="admin-page categories-page">
     <header class="page-heading">
       <div>
-        <span class="page-kicker">CATEGORIES</span>
+        <span class="page-kicker">商品目录 · CATEGORIES</span>
         <h1>分类管理</h1>
-        <p>维护分类层级、展示顺序和启用状态，排序值越小越靠前。</p>
+        <p>让商品井然有序，让每一个分类都清晰易找。</p>
       </div>
       <button class="primary-button" :disabled="busy || loading || !ready" @click="open()">
         <Plus :size="16" />新增根分类
       </button>
     </header>
-    <p v-if="error" class="demo-banner" role="alert">
+    <div class="category-overview" aria-label="分类概览">
+      <article>
+        <span class="overview-icon"><FolderTree :size="22" /></span>
+        <div>
+          <span>全部分类</span><strong>{{ ready ? rows.length : '—' }}<small>个分类</small></strong>
+        </div>
+      </article>
+      <article>
+        <span class="overview-icon blue"><Layers3 :size="22" /></span>
+        <div>
+          <span>一级分类</span><strong>{{ ready ? rootCount : '—' }}<small>个主目录</small></strong>
+        </div>
+      </article>
+      <article>
+        <span class="overview-icon"><CheckCircle2 :size="22" /></span>
+        <div>
+          <span>已启用</span><strong>{{ ready ? activeCount : '—' }}<small>个分类</small></strong>
+        </div>
+      </article>
+      <article>
+        <span class="overview-icon amber"><CirclePause :size="22" /></span>
+        <div>
+          <span>已停用</span
+          ><strong>{{ ready ? rows.length - activeCount : '—' }}<small>个分类</small></strong>
+        </div>
+      </article>
+    </div>
+    <p v-if="error" class="category-feedback is-error" role="alert">
       {{ error }} <button class="text-action" :disabled="busy" @click="load">重新加载</button>
     </p>
-    <p v-if="notice" class="demo-banner" role="status">{{ notice }}</p>
+    <p v-if="notice" class="category-feedback" role="status">{{ notice }}</p>
     <section
       v-if="mode"
       ref="editor"
@@ -242,12 +288,28 @@ onUnmounted(() => {
         </div>
       </form>
     </section>
-    <section class="panel">
+    <section class="panel category-list" aria-labelledby="category-list-title" :aria-busy="loading">
+      <div class="list-heading">
+        <div>
+          <h2 id="category-list-title">
+            <FolderTree :size="20" />分类目录 <span class="count-pill">{{ rows.length }}</span>
+          </h2>
+          <p>按层级管理分类，点击箭头展开下级目录</p>
+        </div>
+        <span class="list-heading-note">清晰分类，有序经营</span>
+      </div>
       <div class="category-toolbar">
-        <label
-          >搜索分类<input v-model="keyword" type="search" placeholder="分类名称 / 编号"
-        /></label>
-        <label
+        <label class="search-field"
+          ><span>搜索分类</span>
+          <div>
+            <Search :size="17" /><input
+              v-model="keyword"
+              type="search"
+              placeholder="输入分类名称 / 编号"
+              aria-label="搜索分类名称或编号"
+            /></div
+        ></label>
+        <label class="status-field"
           >分类状态<select v-model="status">
             <option value="">全部状态</option>
             <option value="active">启用</option>
@@ -255,22 +317,25 @@ onUnmounted(() => {
           </select></label
         >
         <button class="secondary-button" :disabled="loading || busy" @click="load">
-          <RefreshCw :size="15" />刷新
+          <RefreshCw :size="15" :class="{ spinning: loading }" />{{ loading ? '刷新中' : '刷新' }}
         </button>
-        <button class="text-action" @click="collapsed = new Set()">展开全部</button>
+        <button class="text-action" :disabled="filtering" @click="collapsed = new Set()">
+          展开全部
+        </button>
         <button
           class="text-action"
+          :disabled="filtering"
           @click="collapsed = new Set(rows.filter((r) => r.childCount > 0).map((r) => r.id))"
         >
           收起全部
         </button>
       </div>
       <p class="category-tip">
-        共 {{ rows.length }} 个分类 ·
-        {{
-          rows.filter((r) => r.status === 'active').length
-        }}
-        个启用。搜索保留匹配项的上级路径；商品数仅统计直接关联且未删除的商品。
+        <span v-if="filtering"
+          >找到 {{ matchedCount }} 个匹配分类，保留上级路径
+          <button class="text-action" @click="resetFilters">清除筛选</button></span
+        >
+        <span v-else>共 {{ rows.length }} 个分类 · 排序值越小越靠前，商品数仅统计直接关联商品</span>
       </p>
       <div class="table-scroll">
         <table class="admin-table">
@@ -287,14 +352,38 @@ onUnmounted(() => {
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="7">正在加载分类…</td>
+              <td colspan="7">
+                <div class="empty-state">
+                  <RefreshCw class="spinning" :size="28" /><strong>正在加载分类</strong
+                  ><span>正在整理商品目录，请稍候…</span>
+                </div>
+              </td>
             </tr>
             <tr v-else-if="!ready">
-              <td colspan="7">分类加载失败，请重试。</td>
+              <td colspan="7">
+                <div class="empty-state">
+                  <FolderTree :size="32" /><strong>分类加载失败</strong
+                  ><button class="secondary-button" @click="load">重新加载</button>
+                </div>
+              </td>
             </tr>
             <tr v-else-if="!displayRows.length">
               <td colspan="7">
-                {{ rows.length ? '没有符合条件的分类' : '暂无分类，请先新增根分类' }}
+                <div class="empty-state">
+                  <FolderTree :size="36" /><strong>{{
+                    rows.length ? '没有找到相关分类' : '从第一个分类开始'
+                  }}</strong
+                  ><span>{{
+                    rows.length
+                      ? '试试其他关键词，或清除筛选条件'
+                      : '建立清晰的分类目录，方便管理和查找商品'
+                  }}</span
+                  ><button v-if="rows.length" class="secondary-button" @click="resetFilters">
+                    清除筛选</button
+                  ><button v-else class="primary-button" :disabled="busy" @click="open()">
+                    <Plus :size="16" />新增根分类
+                  </button>
+                </div>
               </td>
             </tr>
             <tr
@@ -310,6 +399,7 @@ onUnmounted(() => {
                   <button
                     v-if="row.childCount"
                     class="text-action toggle"
+                    :disabled="filtering"
                     :aria-expanded="!!(keyword || status) || !collapsed.has(row.id)"
                     :aria-label="`展开或收起${row.name}`"
                     @click="toggle(row.id)"
@@ -318,13 +408,19 @@ onUnmounted(() => {
                       v-if="collapsed.has(row.id) && !keyword && !status"
                       :size="16"
                     /><ChevronDown v-else :size="16" /></button
-                  ><span v-else class="toggle-spacer" /><strong>{{ row.name }}</strong>
+                  ><span v-else class="toggle-spacer" /><span
+                    class="folder-mark"
+                    :class="{ root: row.depth === 0 }"
+                    ><Folder :size="17" /></span
+                  ><button class="category-name-link" :disabled="busy" @click="open(row, true)">
+                    {{ row.name }}</button
+                  ><span v-if="row.depth === 0" class="root-label">一级</span>
                 </div>
                 <small :title="row.path"
                   >{{ row.path }}{{ row.context ? '（上级路径）' : '' }}</small
                 >
               </td>
-              <td>{{ row.id }}</td>
+              <td class="category-id">#{{ row.id }}</td>
               <td>{{ row.sort }}</td>
               <td>
                 <span
@@ -470,6 +566,375 @@ td small {
   }
   .category-editor {
     padding: 16px;
+  }
+}
+
+.categories-page {
+  --category-line: #e6ece8;
+}
+.categories-page .page-heading {
+  margin-bottom: 24px;
+}
+.category-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+.category-overview article {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 23px 20px;
+  border: 1px solid var(--category-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 12px #203e2d03;
+}
+.overview-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  color: #287554;
+  background: #edf6ef;
+}
+.overview-icon.blue {
+  color: #517aaa;
+  background: #edf3fb;
+}
+.overview-icon.amber {
+  color: #b18a42;
+  background: #fbf5e9;
+}
+.category-overview article div > span {
+  color: #738079;
+  font-size: 12px;
+}
+.category-overview strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 7px;
+  color: #233e30;
+  font-size: 29px;
+  line-height: 1.2;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.category-overview small {
+  color: #94a097;
+  font-size: 11px;
+  font-weight: 400;
+}
+.category-list {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 23px 24px;
+  border-bottom: 1px solid var(--category-line);
+}
+.list-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  margin: 0;
+}
+.list-heading h2 > svg {
+  color: #367b59;
+}
+.list-heading p {
+  margin: 7px 0 0;
+  color: #8a958e;
+  font-size: 12px;
+}
+.list-heading-note {
+  font-size: 12px;
+  color: #8a9b8f;
+}
+.count-pill {
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  color: #568266;
+  background: #edf5ef;
+}
+.category-toolbar {
+  padding: 20px 24px 12px;
+  gap: 16px;
+}
+.search-field {
+  flex: 1;
+  max-width: 380px;
+  min-width: 200px;
+}
+.search-field > div {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dce4de;
+  border-radius: 8px;
+  background: #fff;
+  padding-left: 12px;
+  color: #8a978e;
+}
+.search-field > div:focus-within {
+  border-color: #408b63;
+  box-shadow: 0 0 0 3px #31805912;
+}
+.search-field input {
+  border: 0;
+  background: transparent;
+  outline: none;
+}
+.status-field {
+  min-width: 150px;
+}
+.category-toolbar select {
+  border-radius: 8px;
+}
+.category-tip {
+  padding: 0 24px 16px;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.category-tip .text-action {
+  margin-left: 10px;
+}
+.category-list .admin-table {
+  min-width: 1050px;
+}
+.category-list .admin-table th {
+  padding-top: 15px;
+  padding-bottom: 15px;
+  background: #f6f9f7;
+  color: #7b8980;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.category-list .admin-table td {
+  padding-top: 19px;
+  padding-bottom: 19px;
+  border-bottom: 1px solid #eff3f0;
+}
+.category-list .admin-table tbody tr:hover {
+  background: #f8fbf9;
+}
+.category-name {
+  gap: 8px;
+}
+.folder-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: #90a195;
+  background: #f2f5f2;
+  flex-shrink: 0;
+}
+.folder-mark.root {
+  color: #448461;
+  background: #ecf5ee;
+}
+.category-name-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #2a4032;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.category-name-link:hover {
+  color: #267b4d;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.root-label {
+  padding: 2px 5px;
+  color: #8b9b8e;
+  border: 1px solid #e2eae3;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 400;
+}
+.category-id {
+  font-size: 12px;
+  color: #8b988f;
+  font-variant-numeric: tabular-nums;
+}
+.category-list td small {
+  font-size: 11px;
+  color: #99a39c;
+  margin-left: 28px;
+  margin-top: 7px;
+}
+.category-list .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.status-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.category-list .row-actions {
+  gap: 12px;
+  min-width: 270px;
+  flex-wrap: nowrap;
+}
+.category-list .row-actions button {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.categories-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.categories-page button:focus-visible,
+.categories-page input:focus-visible,
+.categories-page select:focus-visible {
+  outline: 2px solid #438763;
+  outline-offset: 3px;
+}
+.category-feedback {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border: 1px solid #d9eadd;
+  border-radius: 8px;
+  color: #30754b;
+  background: #eff8f1;
+  overflow-wrap: anywhere;
+}
+.category-feedback.is-error {
+  border-color: #f1d9d5;
+  background: #fff3f1;
+  color: #ad5148;
+}
+.category-editor {
+  border-radius: 12px;
+  border-top: 3px solid #408761;
+  box-shadow: 0 6px 20px #203e2d06;
+}
+.category-editor .panel-heading {
+  margin-bottom: 12px;
+}
+.category-editor > p {
+  line-height: 1.8;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #f6f9f7;
+}
+.category-form fieldset {
+  gap: 22px;
+}
+.category-form input,
+.category-form select {
+  border-radius: 8px;
+  min-height: 42px;
+}
+.form-actions {
+  padding-top: 18px;
+  border-top: 1px solid var(--category-line);
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 55px 20px;
+  color: #9aaa9e;
+}
+.empty-state strong {
+  font-size: 15px;
+  color: #51695a;
+}
+.empty-state span {
+  font-size: 12px;
+}
+.empty-state button {
+  margin-top: 8px;
+}
+.spinning {
+  animation: category-spin 1s linear infinite;
+}
+@keyframes category-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 1100px) {
+  .category-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .category-overview {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .category-overview article {
+    padding: 16px 12px;
+    gap: 10px;
+  }
+  .overview-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+  .category-overview strong {
+    font-size: 24px;
+  }
+  .category-overview small {
+    font-size: 10px;
+  }
+  .list-heading {
+    padding: 18px 16px;
+  }
+  .list-heading-note {
+    display: none;
+  }
+  .category-toolbar {
+    padding: 16px;
+    gap: 14px;
+  }
+  .search-field {
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .status-field {
+    flex: 1;
+  }
+  .category-tip {
+    padding: 0 16px 16px;
+    line-height: 1.8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
   }
 }
 </style>

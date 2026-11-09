@@ -53,6 +53,22 @@ class OrganizationManagementIntegrationTests {
         return create(post("/api/v1/admin/roles"),Map.of("name","员工只读","roleKey","employee_reader","status","active"));
     }
     long permission(String key) { return db.queryForObject("SELECT id FROM permission WHERE permission_key=?",Long.class,key); }
+    @Test void roleAndPermissionsAreSavedAtomically() throws Exception {
+        long id=create(post("/api/v1/admin/roles"),Map.of("name","库存管理","roleKey","inventory_manager","status","active",
+                "permissionIds",List.of(permission("inventory:read"),permission("inventory:write"))));
+        mvc.perform(get("/api/v1/admin/roles/"+id).header("Authorization",admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.permissionIds.length()").value(2));
+        mvc.perform(put("/api/v1/admin/roles/"+id).header("Authorization",admin).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("name","不应保存","roleKey","inventory_manager","status","inactive","permissionIds",List.of(999999)))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/admin/roles/"+id).header("Authorization",admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("库存管理"))
+                .andExpect(jsonPath("$.data.status").value("active")).andExpect(jsonPath("$.data.permissionIds.length()").value(2));
+        mvc.perform(post("/api/v1/admin/roles").header("Authorization",admin).contentType("application/json")
+                .content(json.writeValueAsString(Map.of("name","无效角色","roleKey","invalid_role","status","active","permissionIds",List.of(999999)))))
+                .andExpect(status().isBadRequest());
+        assertEquals(0L,db.queryForObject("SELECT COUNT(*) FROM role WHERE role_key='invalid_role'",Long.class));
+    }
     @Test void employeeCrudEncryptsSecretsAndChecksReferences() throws Exception {
         long employee=newEmployee();
         assertNotEquals("13800138000",db.queryForObject("SELECT phone FROM employee WHERE id=?",String.class,employee));

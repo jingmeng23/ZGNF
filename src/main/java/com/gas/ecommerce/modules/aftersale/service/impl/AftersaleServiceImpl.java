@@ -28,6 +28,8 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
     private final PaymentMapper payments;
     private final org.springframework.jdbc.core.JdbcTemplate db;
     private final com.gas.ecommerce.modules.order.service.OrderInventoryService stock;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<com.gas.ecommerce.modules.payment.wechat.WechatPayGateway> wechat;
 
     public AftersaleServiceImpl(UserMapper users, OrderMapper orders, PaymentMapper payments,org.springframework.jdbc.core.JdbcTemplate db,
             com.gas.ecommerce.modules.order.service.OrderInventoryService stock) {
@@ -119,6 +121,15 @@ public class AftersaleServiceImpl extends ServiceImpl<AftersaleMapper, Aftersale
         if (payment == null || payment.getAmount() == null || payment.getAmount().compareTo(row.getAmount()) != 0
                 || order.getPayAmount() == null || order.getPayAmount().compareTo(row.getAmount()) != 0)
             throw new BusinessException("待退款支付记录不存在或金额不一致");
+        if ("wechat_mini".equals(payment.getChannel())) {
+            String refundNo = "WXAS" + row.getId();
+            if (!refundNo.equals(request.refundReference()))
+                throw new BusinessException("微信支付订单请使用微信原路退款操作，不能手工登记退款成功");
+            var gateway = wechat.getIfAvailable();
+            if (gateway == null) throw new BusinessException("微信支付尚未启用");
+            if (!gateway.refund(payment, refundNo))
+                throw new BusinessException("微信退款处理中，请稍后点击查询退款结果；重复操作使用同一退款编号，不会重复退款");
+        }
         // Unfulfilled orders still hold reservations; fulfilled goods require a separate physical return.
         if ("paid".equals(order.getStatus())) stock.release(order);
         payment.setStatus("refunded"); payments.updateById(payment);

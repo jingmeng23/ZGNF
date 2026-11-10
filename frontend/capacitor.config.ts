@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   android: { backgroundColor: '#f6f8f6' },
   plugins: {
+    CapacitorHttp: { enabled: true },
     SplashScreen: { launchAutoHide: false, backgroundColor: '#173e35', showSpinner: false },
     StatusBar: { backgroundColor: '#f6f8f6', style: 'LIGHT', overlaysWebView: false },
     Keyboard: { resizeOnFullScreen: true },

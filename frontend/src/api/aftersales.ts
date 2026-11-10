@@ -58,6 +58,7 @@ function params(query: AftersaleQuery) {
 const adminPath = (id: string) => `/admin/aftersales/${encodeURIComponent(id)}`
 const userPath = (id: string) => `/aftersales/${encodeURIComponent(id)}`
 export const adminAftersalesApi = {
+  wechatRefund: (id: string) => request<AftersaleRecord>(`${adminPath(id)}/wechat-refund`, { method: 'POST' }),
   list: (query: AftersaleQuery) =>
     request<PageResult<AftersaleRecord>>(`/admin/aftersales?${params(query)}`),
   detail: (id: string) => request<AftersaleRecord>(adminPath(id)),

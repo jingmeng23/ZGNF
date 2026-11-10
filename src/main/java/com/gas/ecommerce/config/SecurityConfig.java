@@ -35,6 +35,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/admin/auth/login").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/users/register", "/api/v1/users/login/password").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/payment/wechat/notify").permitAll()
+                        .requestMatchers("/api/v1/users/me/wechat-binding").hasRole("USER")
                         .requestMatchers("/api/v1/mall/me/**").hasRole("USER")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/mall/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,

@@ -1,5 +1,7 @@
 # gas-ecommerce
 
+微信小程序客户端位于 [miniprogram](miniprogram/README.md)，支付配置、账号绑定和上线步骤见 [微信小程序接入说明](docs/wechat-mini-program.md)。
+
 燃气智能服务电商后端框架，Java 25（已在 OpenJDK 25.0.2 验证）、Spring Boot 3.5.16、Maven。
 
 前端管理框架位于 [frontend](frontend/README.md)，使用 Vue 3 + TypeScript + Vite，包含经营总览及 11 个管理模块。启动后访问 `http://localhost:5173/#/admin`；默认展示演示数据，管理员授权及业务接口待后端继续实现。

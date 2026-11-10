@@ -21,11 +21,15 @@
 
 已成功生成 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`，版本 1.0，包名 `com.zgnf.shop`，最低 Android 6.0（API 23），目标 API 35。APK v1/v2 签名校验通过，大小 4,539,823 字节。
 
-此包临时使用 `http://10.0.2.2:8081/api/v1`，仅供 Android 模拟器连接电脑本机后端；没有开启演示模式或跳过登录。尚未进行真机安装和业务联调，真机使用前需要填入可访问的实际 API 地址并重新打包。
+当前调试包使用 `http://192.168.2.95:8081/api/v1`，与网站开发代理 `http://localhost:8081` 连接同一 Docker 后端；没有开启演示模式或跳过登录。电脑的 `127.0.0.1:8081` 被其他软件占用，模拟器通过 `10.0.2.2:8081` 会收到 `Invalid url`，因此使用已验证可达的局域网地址。8080 是另一套本机 Java 服务，不能只因健康检查正常就替换账号服务。电脑 IP 改变后须更新 `.env.android.local` 并重新打包。
+
+2026-11-10 已验证：网站注册的测试账号可通过 APP 原生网络通道登录，并成功获取 `/users/me`。调试包已覆盖安装到模拟器。
 
 首次构建遇到 Windows 长路径下 Gradle 资源缓存目录移动失败，补齐对应缓存后编译成功。若其他 Windows 机器出现相同错误，应优先将项目放在更短的路径，检查文件占用，并以较低并发重试；不要删除业务文件。
 
 ## 连接后端
+
+APP 已启用 CapacitorHttp，业务 `fetch` 请求通过原生网络通道发送，避免 WebView 的混合内容和浏览器跨域拦截。调试 HTTP 仍需显式设置 `ANDROID_ALLOW_HTTP=true`，正式包仍要求 HTTPS。
 
 复制 `frontend/.env.android.example` 为 `frontend/.env.android.local`，填写真实 API 地址。例如：
 
@@ -38,7 +42,7 @@ ANDROID_ALLOW_HTTP=false
 
 Android WebView 本地来源为 `https://localhost`。后端默认 CORS 已包含该来源；如果部署环境覆盖 `app.cors.allowed-origins`，需要自行将其加入允许列表。图片、上传文件和地图服务地址也必须可从手机访问，正式环境使用 HTTPS。前端构建变量是公开配置，不得填写商户私钥。
 
-模拟器连接电脑后端可用 `http://10.0.2.2:8081/api/v1`，真机使用电脑局域网 IP，并设置 `ANDROID_ALLOW_HTTP=true`。电脑和手机需在同一网络，后端端口需要允许访问。这仅用于调试，正式包始终禁止 HTTP。
+模拟器连接电脑后端可用 `http://10.0.2.2:8080/api/v1`，真机使用电脑局域网 IP，并设置 `ANDROID_ALLOW_HTTP=true`。电脑和手机需在同一网络，后端端口需要允许访问。这仅用于调试，正式包始终禁止 HTTP。
 
 ```powershell
 cd frontend

@@ -134,6 +134,19 @@ async function act(action: 'review' | 'complete') {
   }
 }
 onMounted(load)
+async function wechatRefund() {
+  if (!selected.value || busy.value) return
+  if (!window.confirm('确认向此订单的微信付款账户原路退款？退款处理后不可撤销。')) return
+  busy.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    selected.value = await adminAftersalesApi.wechatRefund(selected.value.id)
+    notice.value = '微信已确认退款成功，订单状态已同步'
+    await load()
+    operations.value = await adminAftersalesApi.operations(selected.value.id)
+  } catch (e) { error.value = explain(e) } finally { busy.value = false }
+}
 onUnmounted(() => sequence++)
 </script>
 <template>
@@ -284,6 +297,10 @@ onUnmounted(() => sequence++)
         @submit.prevent="act('complete')"
       >
         <h3>登记渠道退款完成</h3>
+        <p>微信小程序订单使用原路退款；其他渠道仍需核实真实退款结果后登记。</p>
+        <button type="button" class="primary-button" :disabled="busy" @click="wechatRefund">
+          {{ busy ? '确认中…' : '微信原路退款 / 查询退款结果' }}
+        </button>
         <label
           >支付渠道退款流水号<input
             v-model="refundReference"

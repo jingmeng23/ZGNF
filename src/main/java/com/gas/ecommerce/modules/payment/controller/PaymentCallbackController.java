@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
             @RequestHeader(value="X-Payment-Timestamp",defaultValue="") String timestamp,
             @RequestHeader(value="X-Payment-Signature",defaultValue="") String signature,
             @RequestBody String body, jakarta.servlet.http.HttpServletRequest servletRequest) {
+        if ("wechat_mini".equals(channel)) throw new BusinessException("微信支付必须使用官方验签通知接口");
         sources.verify(servletRequest.getRemoteAddr());
         verifier.verify(channel,timestamp,signature,body);
         PaymentCallbackRequest request;

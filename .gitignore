@@ -6,3 +6,7 @@ target/
 *.log
 /artifacts/store-removal/
 .env
+/secrets/
+/miniprogram/config.local.js
+/miniprogram/project.private.config.json
+/miniprogram/node_modules/

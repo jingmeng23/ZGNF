@@ -28,4 +28,5 @@ public record AddressRequest(
         return ((provinceCode==null && cityCode==null && districtCode==null) || (provinceCode!=null && cityCode!=null && districtCode!=null))
                 && ((latitude==null)==(longitude==null));
     }
+
 }

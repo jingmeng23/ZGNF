@@ -7,6 +7,17 @@ target/
 /artifacts/store-removal/
 .env
 /secrets/
+/uploads/
 /miniprogram/config.local.js
 /miniprogram/project.private.config.json
 /miniprogram/node_modules/
+
+# Dependencies, caches and generated output (all clients)
+node_modules/
+.npm-cache/
+dist/
+*.tsbuildinfo
+
+# Local reports, delivery packages and backups
+/artifacts/**
+!/artifacts/README.md

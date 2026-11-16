@@ -34,6 +34,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "/db/migration/V1.4__operation_management.sql", "/db/migration/V1.5__payment_callback.sql",
         "/db/migration/V1.6__organization_management.sql", "/db/migration/V1.7__coupon_workflow.sql", "/db/migration/V1.8__work_order_workflow.sql", "/db/migration/V1.9__inventory_management.sql", "/db/migration/V1.10__business_statistics.sql", "/db/migration/V1.11__cart_price_snapshot.sql", "/db/migration/V1.12__product_details.sql", "/db/migration/V1.13__mall_catalog.sql", "/db/migration/V1.14__mall_cache_invalidation_retry.sql", "/db/migration/V1.15__order_checkout_outbox.sql", "/db/migration/V1.16__checkout_orchestration.sql", "/db/migration/V1.17__payment_recovery.sql", "/db/migration/V1.18__order_close_release.sql", "/db/migration/V1.19__order_read_timeline.sql", "/db/migration/V1.20__address_assistance.sql", "/db/migration/V1.26__address_coordinate_system.sql", "/db/migration/V1.21__admin_order_operations.sql","/db/migration/V1.22__available_sku_display_price.sql", "/db/migration/V1.23__aftersale_management.sql", "/db/migration/V1.28__remove_store_management.sql"})
 class AdminCatalogIntegrationTests {
+    @org.junit.jupiter.api.io.TempDir static java.nio.file.Path productImages;
+    @org.springframework.test.context.DynamicPropertySource
+    static void imageDirectory(org.springframework.test.context.DynamicPropertyRegistry properties) {
+        properties.add("app.product-images.directory", () -> productImages.toString());
+    }
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate db;
@@ -67,6 +72,66 @@ class AdminCatalogIntegrationTests {
         bearer = "Bearer " + tokens.generateAccessToken(7L, "admin");
         userBearer = "Bearer " + tokens.generateAccessToken(100L, "user");
         secondUserBearer = "Bearer " + tokens.generateAccessToken(101L, "user");
+    }
+
+    private byte[] pngImage() throws java.io.IOException {
+        var output = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(2, 3, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", output);
+        return output.toByteArray();
+    }
+
+    @Test void uploadedProductImagesAreStoredPublishedAndSavedWithTheProduct() throws Exception {
+        byte[] image = pngImage();
+        var uploaded = mvc.perform(multipart("/api/v1/admin/products/images")
+                        .file(new org.springframework.mock.web.MockMultipartFile("file", "../../cover.svg", "text/plain", image))
+                        .header("Authorization", bearer))
+                .andExpect(status().isOk()).andReturn();
+        String url = json.readTree(uploaded.getResponse().getContentAsString()).at("/data/url").asText();
+        assertTrue(url.matches("/api/v1/media/products/[a-f0-9-]+\\.png"));
+        assertArrayEquals(image, java.nio.file.Files.readAllBytes(productImages.resolve(url.substring(url.lastIndexOf('/') + 1))));
+        mvc.perform(get(url)).andExpect(status().isOk()).andExpect(content().contentType("image/png"))
+                .andExpect(content().bytes(image));
+        mvc.perform(get(url.replace(".png", "-missing.png"))).andExpect(status().isNotFound());
+
+        long category = category(0, "Uploaded images");
+        var created = mvc.perform(post("/api/v1/admin/products").header("Authorization", bearer).contentType("application/json")
+                        .content(json.writeValueAsString(Map.of("categoryId", category, "name", "Image product", "price", 10,
+                                "coverUrl", url, "detailImages", java.util.List.of(url)))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.coverUrl").value(url))
+                .andExpect(jsonPath("$.data.detailImages[0]").value(url)).andReturn();
+        String id = json.readTree(created.getResponse().getContentAsString()).at("/data/id").asText();
+        mvc.perform(get("/api/v1/admin/products/" + id).header("Authorization", bearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.coverUrl").value(url))
+                .andExpect(jsonPath("$.data.detailImages[0]").value(url));
+        mvc.perform(put("/api/v1/admin/products/" + id).header("Authorization", bearer).contentType("application/json")
+                        .content(json.writeValueAsString(Map.of("categoryId", category, "name", "Image product", "price", 10,
+                                "detailImages", java.util.List.of()))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.coverUrl").doesNotExist())
+                .andExpect(jsonPath("$.data.detailImages").isEmpty());
+        // Removing a reference must not delete an image still used by another product or an order.
+        mvc.perform(get(url)).andExpect(status().isOk());
+    }
+
+    @Test void imageUploadsRequireProductWritePermission() throws Exception {
+        var image = new org.springframework.mock.web.MockMultipartFile("file", "cover.png", "image/png", pngImage());
+        mvc.perform(multipart("/api/v1/admin/products/images").file(image)).andExpect(status().isUnauthorized());
+        mvc.perform(multipart("/api/v1/admin/products/images").file(image).header("Authorization", userBearer))
+                .andExpect(status().isForbidden());
+        db.update("DELETE FROM role_permission WHERE permission_id IN (SELECT id FROM permission WHERE permission_key='product:write')");
+        mvc.perform(multipart("/api/v1/admin/products/images").file(image).header("Authorization", bearer))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test void imageUploadsRejectEmptyMissingForgedAndOversizedFiles() throws Exception {
+        for (byte[] bytes : java.util.List.of(new byte[0], "<svg onload='alert(1)'/>".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                new byte[10 * 1024 * 1024 + 1], new byte[] {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10})) {
+            mvc.perform(multipart("/api/v1/admin/products/images")
+                            .file(new org.springframework.mock.web.MockMultipartFile("file", "cover.png", "image/png", bytes))
+                            .header("Authorization", bearer))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(400001));
+        }
+        mvc.perform(multipart("/api/v1/admin/products/images").header("Authorization", bearer))
+                .andExpect(status().isBadRequest());
     }
 
     @Test void loginChecksPasswordStatusAndRoles() throws Exception {
@@ -615,6 +680,7 @@ class AdminCatalogIntegrationTests {
         db.update("INSERT INTO cart_item(user_id,product_id,quantity,selected) VALUES(100,?,2,1),(100,?,1,0),(101,?,1,1)",
                 product, otherProduct, product);
         long itemId = db.queryForObject("SELECT id FROM cart_item WHERE user_id=100 AND product_id=?", Long.class, product);
+        long otherItemId = db.queryForObject("SELECT id FROM cart_item WHERE user_id=100 AND product_id=?", Long.class, otherProduct);
         mvc.perform(put("/api/v1/cart/items/" + itemId).header("Authorization", userBearer)
                         .contentType("application/json").content("{\"quantity\":3}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.selectedAmount").value(300));
@@ -623,6 +689,21 @@ class AdminCatalogIntegrationTests {
                         .contentType("application/json").content("{\"selected\":true}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.selectedQuantity").value(4))
                 .andExpect(jsonPath("$.data.selectedAmount").value(340));
+        db.update("UPDATE product SET status='off_shelf' WHERE id=?", otherProduct);
+        mvc.perform(put("/api/v1/cart/selection").header("Authorization", userBearer)
+                        .contentType("application/json").content("{\"selected\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.selectedQuantity").value(3))
+                .andExpect(jsonPath("$.data.invalidItems[0].selected").value(false));
+        mvc.perform(put("/api/v1/cart/items/" + otherItemId + "/selection").header("Authorization", userBearer)
+                        .contentType("application/json").content("{\"selected\":true}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/v1/cart/items/" + otherItemId + "/selection").header("Authorization", userBearer)
+                        .contentType("application/json").content("{\"selected\":false}"))
+                .andExpect(status().isOk());
+        db.update("UPDATE product SET status='on_sale' WHERE id=?", otherProduct);
+        mvc.perform(put("/api/v1/cart/items/" + otherItemId + "/selection").header("Authorization", userBearer)
+                        .contentType("application/json").content("{\"selected\":true}"))
+                .andExpect(status().isOk());
         db.update("UPDATE inventory SET locked_quantity=8 WHERE product_id=?", product);
         mvc.perform(get("/api/v1/cart").header("Authorization", userBearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.selectedQuantity").value(1))
@@ -1633,7 +1714,14 @@ class AdminCatalogIntegrationTests {
                 .andExpect(jsonPath("$.data.previous.receivedAmount").value(50))
                 .andExpect(jsonPath("$.data.receivedGrowthPercent").value(80))
                 .andExpect(jsonPath("$.data.orderStatuses.pending_payment").value(1))
-                .andExpect(jsonPath("$.data.recentOrders[0].orderNo").value("STAT-PENDING"));
+                .andExpect(jsonPath("$.data.recentOrders[0].orderNo").value("STAT-PENDING"))
+                .andExpect(jsonPath("$.data.todos.paidOrders").value(1))
+                .andExpect(jsonPath("$.data.todos.pendingAftersales").value(0))
+                .andExpect(jsonPath("$.data.todos.pendingRefunds").value(0));
+        db.update("INSERT INTO aftersale(aftersale_no,order_id,user_id,amount,status) VALUES('SA-PENDING',700,100,50,'pending'),('SA-APPROVED',700,100,50,'approved')");
+        mvc.perform(statisticsGet("/overview","2026-03-02","2026-03-02")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.todos.pendingAftersales").value(1))
+                .andExpect(jsonPath("$.data.todos.pendingRefunds").value(1));
         mvc.perform(statisticsGet("/overview","2026-03-03","2026-03-03")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.current.receivedAmount").value(30))
                 .andExpect(jsonPath("$.data.current.refundAmount").value(90))

@@ -22,6 +22,7 @@ import {
   type ProductStatus,
 } from '../api/products'
 import { ApiError } from '../api/http'
+import { productImageUrl } from '../api/images'
 
 const labels: Record<ProductStatus, string> = {
   draft: '草稿',
@@ -52,8 +53,8 @@ const loading = ref(false),
   notice = ref('')
 const mode = ref<'create' | 'edit' | 'detail' | null>(null),
   selected = ref<AdminProduct | null>(null)
-const editor = ref<HTMLElement>(),
-  images = ref('')
+const editor = ref<HTMLElement>()
+const uploadStatus = ref('')
 const categoryEditor = ref(false)
 const categoryForm = reactive({
   name: '',
@@ -191,11 +192,10 @@ async function open(row?: AdminProduct, detail = false) {
             price: product.price,
             originalPrice: product.originalPrice,
             description: product.description,
-            detailImages: product.detailImages,
+            detailImages: [...product.detailImages],
           }
         : blank(),
     )
-    images.value = form.detailImages.join('\n')
     mode.value = product ? (detail ? 'detail' : 'edit') : 'create'
     categoryEditor.value = false
     requestAnimationFrame(() =>
@@ -207,14 +207,61 @@ async function open(row?: AdminProduct, detail = false) {
     busy.value = false
   }
 }
+async function uploadImages(event: Event, kind: 'cover' | 'detail') {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  input.value = ''
+  if (!files.length || busy.value || readonly.value) return
+  error.value = ''
+  notice.value = ''
+  if (kind === 'detail' && form.detailImages.length + files.length > 20) {
+    error.value = '详情图片最多 20 张，请移除部分图片后再上传'
+    return
+  }
+  if (files.some((file) => file.size === 0 || file.size > 10 * 1024 * 1024)) {
+    error.value = '请选择非空图片，单张图片不能超过 10MB'
+    return
+  }
+  if (
+    files.some((file) =>
+      file.type
+        ? !['image/jpeg', 'image/png', 'image/gif'].includes(file.type)
+        : !/\.(jpe?g|png|gif)$/i.test(file.name),
+    )
+  ) {
+    error.value = '请选择 JPG、PNG 或 GIF 图片'
+    return
+  }
+  busy.value = true
+  try {
+    for (const [index, file] of files.entries()) {
+      uploadStatus.value = `正在上传图片 ${index + 1}/${files.length}…`
+      const image = await productsApi.uploadImage(file)
+      if (kind === 'cover') form.coverUrl = image.url
+      else form.detailImages.push(image.url)
+    }
+  } catch (e) {
+    error.value = `图片上传失败：${explain(e)}。已上传的图片已保留，可重新选择未完成的图片。`
+  } finally {
+    uploadStatus.value = ''
+    busy.value = false
+  }
+}
+function removeDetailImage(index: number) {
+  if (!busy.value && !readonly.value) form.detailImages.splice(index, 1)
+}
+function moveDetailImage(index: number, offset: number) {
+  if (busy.value || readonly.value) return
+  const target = index + offset
+  if (target < 0 || target >= form.detailImages.length) return
+  const image = form.detailImages.splice(index, 1)[0]!
+  form.detailImages.splice(target, 0, image)
+}
 async function save() {
   if (busy.value || readonly.value) return
   error.value = ''
   notice.value = ''
-  const detailImages = images.value
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+  const detailImages = [...form.detailImages]
   const imageUrl = /^(https?:\/\/|\/(?!\/))[^\r\n]*$/
   if (!form.name.trim()) {
     error.value = '请输入商品名称'
@@ -233,7 +280,7 @@ async function save() {
     detailImages.some((url) => url.length > 512 || !imageUrl.test(url)) ||
     (form.coverUrl?.trim() && !imageUrl.test(form.coverUrl.trim()))
   ) {
-    error.value = '图片须使用 http(s) 地址或站内绝对路径；详情图最多 20 张，每个地址不超过 512 字符'
+    error.value = '图片信息无效，请重新上传；详情图片最多 20 张'
     return
   }
   busy.value = true
@@ -536,21 +583,34 @@ async function remove(row: AdminProduct) {
               <p>使用清晰的图片与准确的描述，帮助顾客了解商品。</p>
             </div>
           </div>
-          <label class="wide"
-            >封面图片地址<input
-              v-model="form.coverUrl"
-              maxlength="512"
-              placeholder="https://… 或 /images/products/pepsi.png"
-            /><small
-              >请填写网络图片地址或网站内路径，例如 /images/products/pepsi.png。</small
-            ></label
-          >
+          <label v-if="!readonly" class="wide image-upload"
+            >商品封面图片<input
+              type="file"
+              accept="image/jpeg,image/png,image/gif"
+              aria-label="上传商品封面图片"
+              @change="uploadImages($event, 'cover')"
+            /><small>选择一张 JPG、PNG 或 GIF 图片，单张不超过 10MB；重新选择可替换封面。</small>
+          </label>
           <div class="cover-preview">
             <ProductImage :src="form.coverUrl" :alt="form.name || '商品封面预览'" kind="stove" />
           </div>
           <div class="cover-caption">
             <strong>封面预览</strong>
-            <p>填写图片地址后可在此预览。建议使用主体清晰、背景简洁的商品图片。</p>
+            <p>
+              {{
+                form.coverUrl
+                  ? '建议使用主体清晰、背景简洁的商品图片。'
+                  : '选择商品图片后可在此预览。'
+              }}
+            </p>
+            <button
+              v-if="form.coverUrl && !readonly"
+              type="button"
+              class="text-action"
+              @click="form.coverUrl = null"
+            >
+              移除封面
+            </button>
           </div>
           <label class="wide"
             >商品描述<textarea
@@ -560,17 +620,73 @@ async function remove(row: AdminProduct) {
               placeholder="商品介绍、规格、使用说明；按纯文本展示"
             />
           </label>
-          <label class="wide"
-            >详情图片地址<textarea
-              v-model="images"
-              rows="4"
-              placeholder="每行一个图片地址，最多 20 张"
-            />
-          </label>
+          <div class="wide detail-images">
+            <label v-if="!readonly" class="image-upload"
+              >商品详情图片（{{ form.detailImages.length }}/20）<input
+                type="file"
+                accept="image/jpeg,image/png,image/gif"
+                multiple
+                aria-label="上传商品详情图片"
+                :disabled="form.detailImages.length >= 20"
+                @change="uploadImages($event, 'detail')"
+              /><small
+                >可一次选择多张，最多 20 张，单张不超过 10MB；按下方顺序展示，可调整或移除。</small
+              >
+            </label>
+            <p v-if="!form.detailImages.length" class="image-empty">暂无详情图片</p>
+            <div v-else class="detail-image-grid">
+              <div
+                v-for="(src, index) in form.detailImages"
+                :key="`${src}-${index}`"
+                class="detail-image-card"
+              >
+                <a
+                  :href="productImageUrl(src)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :aria-label="`查看详情图片 ${index + 1}`"
+                >
+                  <img
+                    :src="productImageUrl(src)"
+                    :alt="`商品详情图片 ${index + 1}`"
+                    loading="lazy"
+                  />
+                </a>
+                <span>详情图 {{ index + 1 }}</span>
+                <div v-if="!readonly" class="image-actions">
+                  <button
+                    type="button"
+                    class="text-action"
+                    :disabled="index === 0"
+                    @click="moveDetailImage(index, -1)"
+                  >
+                    前移
+                  </button>
+                  <button
+                    type="button"
+                    class="text-action"
+                    :disabled="index === form.detailImages.length - 1"
+                    @click="moveDetailImage(index, 1)"
+                  >
+                    后移
+                  </button>
+                  <button
+                    type="button"
+                    class="text-action"
+                    :aria-label="`移除详情图片 ${index + 1}`"
+                    @click="removeDetailImage(index)"
+                  >
+                    移除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </fieldset>
+        <p v-if="uploadStatus" class="upload-status" role="status">{{ uploadStatus }}</p>
         <div class="editor-actions">
           <button v-if="!readonly" class="primary-button" :disabled="busy || !optionsReady">
-            {{ busy ? '保存中…' : '保存商品' }}</button
+            {{ uploadStatus ? '图片上传中…' : busy ? '保存中…' : '保存商品' }}</button
           ><button
             v-if="readonly"
             type="button"
@@ -1374,6 +1490,55 @@ td small {
   font-size: 11px;
   color: #a6b192;
   max-width: 320px;
+}
+.image-upload {
+  display: grid;
+  gap: 10px;
+}
+.image-upload input[type='file']::file-selector-button {
+  border: 1px solid #dce7cc;
+  border-radius: 6px;
+  background: #edf5e5;
+  color: #687e54;
+  padding: 8px 12px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+.detail-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.detail-image-card {
+  min-width: 0;
+  border: 1px solid #e0e8d7;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fbf3;
+  color: #81966d;
+  font-size: 12px;
+}
+.detail-image-card img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+  margin-bottom: 10px;
+}
+.image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.image-empty,
+.upload-status {
+  color: #81966d;
+  font-size: 12px;
+  line-height: 1.8;
 }
 .editor-actions {
   border-top: 1px solid #e9efdf;

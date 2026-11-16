@@ -1,1 +1,21 @@
-<view class="page"><view class="title">确认订单</view><view wx:if="error" class="error">{{error}}</view><view class="card" bindtap="address"><view class="section">收货地址 ›</view><block wx:if="address"><view>{{address.receiver}} · {{address.phone}}</view><view class="muted">{{address.province}}{{address.city}}{{address.district}}{{address.detail}}</view></block><view wx:else>请先添加收货地址</view></view><button class="secondary" bindtap="coupons" disabled="{{busy}}">选择优惠券</button><view wx:if="quote" class="card"><view wx:for="quote.items" wx:key="productId" class="row"><view>{{item.productName}} × {{item.quantity}}</view><view>¥{{item.unitPrice}}</view></view><view class="divider"/><view class="row"><text>商品金额</text><text>¥{{quote.totalAmount}}</text></view><view class="row"><text>优惠</text><text>−¥{{quote.discountAmount}}</text></view><view class="row"><text>运费</text><text>¥{{quote.freightAmount}}</text></view><view class="row"><text>应付金额</text><text class="price">¥{{quote.payAmount}}</text></view></view><button bindtap="submit" loading="{{busy}}" disabled="{{busy || !quote}}">提交订单，前往付款</button><view class="muted">价格、配送范围与库存由商城在提交时再次校验。</view></view>
+<view class="page">
+  <view class="title">确认订单</view><view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <view class="card" bindtap="address"><view class="section">收货地址 {{pending ? '' : '›'}}</view><block wx:if="{{address}}"><view>{{address.receiver}} · {{address.phone}}</view><view class="muted">{{address.province}}{{address.city}}{{address.district}}{{address.detail}}</view></block><view wx:else>请选择或添加收货地址</view></view>
+  <button class="secondary" bindtap="coupons" disabled="{{busy || pending}}">{{coupon ? coupon.name : '选择优惠券'}}</button>
+  <view wx:if="{{showCoupons}}" class="card">
+    <view class="section">可选择的优惠券</view><button class="secondary" bindtap="chooseCoupon" disabled="{{busy}}">不使用优惠券</button>
+    <view wx:for="{{couponRows}}" wx:key="id" class="card"><view>{{item.name}}</view><view class="price">减 ¥{{item.amount}}</view><view class="muted">满 ¥{{item.minimumAmount}} 可用 · 有效期至 {{item.expireTime}}</view><button class="secondary" data-id="{{item.id}}" bindtap="chooseCoupon" disabled="{{busy}}">使用此券</button></view>
+    <view wx:if="{{!couponRows.length && !busy}}" class="empty">暂无未使用的优惠券</view>
+    <view class="actions"><button class="secondary" data-delta="-1" bindtap="couponPage" disabled="{{busy || couponPage <= 1}}">上一页</button><button class="secondary" data-delta="1" bindtap="couponPage" disabled="{{busy || couponPage >= couponPages}}">下一页</button></view>
+    <view class="muted">第 {{couponPage}} / {{couponPages}} 页 · 实际可用条件在结算时校验</view><button class="secondary" bindtap="closeCoupons" disabled="{{busy}}">收起优惠券</button>
+  </view>
+  <view wx:if="{{quote}}" class="card">
+    <view class="section">商品与费用</view>
+    <view wx:for="{{quote.items}}" wx:key="productId" class="row"><view>{{item.productName}} × {{item.quantity}}</view><view>¥{{item.unitPrice}}</view></view><view class="divider"/>
+    <view class="row"><text>商品金额</text><text>¥{{quote.totalAmount}}</text></view><view class="row"><text>优惠合计</text><text>−¥{{quote.discountAmount}}</text></view><view class="row"><text>运费</text><text>¥{{quote.freightAmount}}</text></view><view class="row"><text>应付金额</text><text class="price">¥{{quote.payAmount}}</text></view>
+  </view>
+  <view class="card"><view class="label">订单备注（选填）</view><textarea value="{{remark}}" bindinput="input" maxlength="500" placeholder="填写配送或其他需要说明的事项" disabled="{{busy || pending}}"/></view>
+  <button bindtap="submit" loading="{{busy}}" disabled="{{busy || !quote}}">{{pending ? '重试原订单提交' : '提交订单，前往付款'}}</button>
+  <button wx:if="{{!pending}}" class="secondary" bindtap="preview" disabled="{{busy || !address}}">刷新结算信息</button>
+  <view class="muted">库存、价格、优惠和配送范围均在提交时再次核对。</view>
+</view>

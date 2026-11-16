@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/users/me/wechat-binding").hasRole("USER")
                         .requestMatchers("/api/v1/mall/me/**").hasRole("USER")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/mall/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/media/products/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/api/v1/products", "/api/v1/products/*", "/api/v1/categories", "/api/v1/categories/tree").permitAll()
                         // 登录、支付平台回调、API 文档和健康检查无需先登录。

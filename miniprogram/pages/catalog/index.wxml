@@ -1,1 +1,76 @@
-<view class="page"><view class="eyebrow">CURATED FOR YOUR HOME</view><view class="title">好物商城</view><input placeholder="搜索商品" value="{{keyword}}" bindinput="input" bindconfirm="search"/><button bindtap="search" loading="{{loading}}">搜索</button><view wx:if="error" class="error">{{error}}</view><view class="grid"><view wx:for="products" wx:key="id" class="card" data-id="{{item.id}}" bindtap="product"><image wx:if="item.image" class="image" src="{{item.image}}" mode="aspectFit"/><view>{{item.name}}</view><view class="price">¥{{item.price}}</view><view class="muted">{{item.statusMessage}}</view></view></view><view wx:if="!products.length && !loading" class="empty">暂无匹配商品</view><view class="actions"><button class="secondary" disabled="{{page <= 1 || loading}}" bindtap="previous">上一页</button><button class="secondary" disabled="{{page >= pages || loading}}" bindtap="next">下一页</button></view><view class="muted">第 {{page}} 页</view></view>
+<page-meta page-style="{{showFilters ? 'overflow: hidden;' : ''}}" />
+<view class="catalog-page">
+  <view class="catalog-header">
+    <view class="catalog-search">
+      <view class="search-icon" aria-hidden="true"></view>
+      <input class="search-input" placeholder="搜索商品名称" value="{{keyword}}" bindinput="input" bindconfirm="search" confirm-type="search" maxlength="100" aria-label="搜索商品" />
+      <button wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清空搜索">清空</button>
+      <button class="search-submit" bindtap="search" hover-class="pressed">搜索</button>
+    </view>
+    <scroll-view class="category-scroll" scroll-x="{{true}}" scroll-into-view="{{categoryScrollTarget}}" scroll-with-animation="{{true}}" show-scrollbar="{{false}}">
+      <view class="category-tabs">
+        <button wx:for="{{categoryShortcuts}}" wx:key="id" id="root-{{item.id || 'all'}}" class="category-tab {{rootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="quickCategory" aria-label="{{item.name}}分类" aria-selected="{{rootId === item.id}}" hover-class="pressed">{{item.name}}</button>
+      </view>
+    </scroll-view>
+    <scroll-view wx:if="{{subcategories.length}}" class="subcategory-scroll" scroll-x="{{true}}" scroll-into-view="sub-{{categoryId}}" show-scrollbar="{{false}}">
+      <view class="subcategory-tabs">
+        <button wx:for="{{subcategories}}" wx:key="id" id="sub-{{item.id}}" class="subcategory-tab {{categoryId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="quickCategory" aria-selected="{{categoryId === item.id}}" hover-class="pressed">{{item.name}}</button>
+      </view>
+    </scroll-view>
+    <view class="sort-bar">
+      <button class="sort-button {{sortIndex === 0 ? 'active' : ''}}" data-key="0" bindtap="chooseSort">综合</button>
+      <button class="sort-button {{sortIndex === 1 ? 'active' : ''}}" data-key="1" bindtap="chooseSort">销量</button>
+      <button class="sort-button {{sortIndex === 2 || sortIndex === 3 ? 'active' : ''}}" data-key="price" bindtap="chooseSort" aria-label="{{sortIndex === 2 ? '价格从低到高，点击切换为从高到低' : '价格排序，点击从低到高'}}">价格<view class="price-arrows" aria-hidden="true"><view class="arrow-up {{sortIndex === 2 ? 'arrow-active' : ''}}"></view><view class="arrow-down {{sortIndex === 3 ? 'arrow-active' : ''}}"></view></view></button>
+      <button class="sort-button {{sortIndex === 4 ? 'active' : ''}}" data-key="4" bindtap="chooseSort">新品</button>
+      <button class="sort-button filter-toggle {{filterCount ? 'active' : ''}}" bindtap="toggleFilters">筛选<text wx:if="{{filterCount}}" class="filter-count">{{filterCount}}</text><view wx:else class="filter-icon" aria-hidden="true"></view></button>
+    </view>
+  </view>
+
+  <view class="catalog-content">
+    <view wx:if="{{optionsError}}" class="options-notice"><text>{{optionsError}}</text><button class="text-button" bindtap="options" disabled="{{optionsLoading}}">重试</button></view>
+    <view class="result-summary"><text>{{categoryLabel}}</text><text>{{ready ? '共 ' + total + ' 件商品' : (loading ? '正在加载…' : '')}}</text></view>
+    <view wx:if="{{error}}" class="request-error" role="alert"><view class="error-copy"><text>商品暂时加载失败</text><text class="error-detail">{{products.length ? '暂时显示上次商品，可重试更新' : error}}</text></view><button class="text-button" bindtap="retry" disabled="{{loading}}">重试</button></view>
+    <view wx:if="{{loading && !products.length}}" class="catalog-grid" aria-label="正在加载商品">
+      <view wx:for="{{skeletons}}" wx:key="*this" class="catalog-product skeleton-card" aria-hidden="true"><view class="catalog-image-frame skeleton"></view><view class="skeleton-line skeleton"></view><view class="skeleton-line short skeleton"></view></view>
+    </view>
+    <view wx:elif="{{ready && !products.length && !error}}" class="empty-state"><view class="empty-symbol" aria-hidden="true"></view><text class="empty-title">没有找到匹配的商品</text><text class="empty-note">试试其他分类，或调整搜索和筛选条件</text><button class="empty-button" bindtap="reset">查看全部商品</button></view>
+    <view wx:elif="{{products.length}}" class="catalog-grid">
+      <view wx:for="{{products}}" wx:key="id" class="catalog-product" data-id="{{item.id}}" bindtap="product" role="button" aria-label="{{item.name}}，查看详情" hover-class="pressed">
+        <view class="catalog-image-frame">
+          <image wx:if="{{item.image && !item.imageFailed}}" class="catalog-image" src="{{item.image}}" mode="aspectFit" lazy-load="{{index > 1}}" data-id="{{item.id}}" binderror="imageError" />
+          <view wx:else class="catalog-image-fallback">图片暂缺</view>
+          <text wx:if="{{!item.purchasable}}" class="unavailable-badge">暂不可购</text>
+        </view>
+        <view class="product-info">
+          <view class="catalog-product-name">{{item.name}}</view>
+          <view class="catalog-product-subtitle">{{item.subtitle || item.brandName || '查看商品详情'}}</view>
+          <view class="catalog-product-foot">
+            <view wx:if="{{item.priceText}}" class="catalog-price"><text class="currency">¥</text><text>{{item.priceText}}</text></view><text wx:else class="unavailable-label">价格待确认</text>
+            <button wx:if="{{item.purchasable && item.priceText}}" class="product-action {{item.needsSpec ? 'spec-action' : ''}}" data-id="{{item.id}}" catchtap="product" aria-label="{{item.name}}，{{item.needsSpec ? '选择规格' : '查看并选购'}}">{{item.needsSpec ? '选规格' : '选购'}}</button><text wx:else class="unavailable-label">查看详情</text>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{products.length}}" class="list-footer">
+      <text wx:if="{{loading}}">{{loadingMore ? '正在加载更多…' : '正在更新商品…'}}</text>
+      <view wx:elif="{{moreError}}" class="more-error"><text>{{moreError}}</text><button class="text-button" bindtap="loadMore">点击重试</button></view>
+      <button wx:elif="{{hasMore}}" class="load-more" bindtap="loadMore">加载更多商品</button>
+      <text wx:elif="{{!error}}">已显示全部商品</text>
+    </view>
+  </view>
+</view>
+
+<view wx:if="{{showFilters}}" class="filter-overlay">
+  <view class="filter-mask" bindtap="closeFilters" catchtouchmove="preventScroll" aria-label="关闭筛选"></view>
+  <view class="filter-sheet" role="dialog" aria-label="筛选商品">
+    <view class="sheet-heading"><text>筛选商品</text><button class="cancel-button" bindtap="closeFilters">取消</button></view>
+    <scroll-view class="sheet-body" scroll-y="{{true}}">
+      <view class="filter-field"><view class="field-label">品牌</view><picker class="brand-picker" range="{{brands}}" range-key="name" value="{{brandIndex}}" bindchange="draftBrand"><view class="brand-choice"><text>{{filterDraft.brandLabel}}</text><view class="chevron" aria-hidden="true"></view></view></picker></view>
+      <view class="filter-field"><view class="field-label">价格区间（元）</view><view class="price-inputs"><input type="digit" placeholder="最低价" value="{{filterDraft.minPrice}}" data-key="minPrice" bindinput="draftInput" maxlength="11" aria-label="最低价格" /><text class="range-separator">至</text><input type="digit" placeholder="最高价" value="{{filterDraft.maxPrice}}" data-key="maxPrice" bindinput="draftInput" maxlength="11" aria-label="最高价格" /></view></view>
+      <view class="stock-field"><view><view class="field-label">仅看有货</view><text class="field-note">隐藏暂时缺货的商品</text></view><switch checked="{{filterDraft.inStock}}" bindchange="draftStock" color="#087f95" aria-label="仅看有货商品" /></view>
+      <view wx:if="{{filterError}}" class="filter-error" role="alert">{{filterError}}</view>
+      <view class="filter-note">选择条件后，点击“查看结果”应用筛选</view>
+    </scroll-view>
+    <view class="sheet-actions"><button class="reset-button" bindtap="resetDraft">重置</button><button class="apply-button" bindtap="applyFilters">查看结果</button></view>
+  </view>
+</view>

@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "商品分类",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "onReachBottomDistance": 160,
+  "usingComponents": {}
+}

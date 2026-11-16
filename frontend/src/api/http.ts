@@ -11,12 +11,18 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs = 15000,
+  responseType: 'json' | 'csv' = 'json',
+): Promise<T> {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
   const headers = new Headers(options.headers)
   headers.set('Accept', 'application/json')
-  if (options.body) headers.set('Content-Type', 'application/json')
+  if (options.body instanceof FormData) headers.delete('Content-Type')
+  else if (options.body) headers.set('Content-Type', 'application/json')
   const current = session.read()
   if (current) headers.set('Authorization', `Bearer ${current.token}`)
   try {
@@ -25,6 +31,13 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       headers,
       signal: controller.signal,
     })
+    if (
+      response.ok &&
+      responseType === 'csv' &&
+      /^text\/csv(?:;|$)/i.test(response.headers.get('Content-Type') || '')
+    ) {
+      return (await response.text()) as T
+    }
     let body: Partial<ApiResult<T>> | undefined
     try {
       body = (await response.json()) as Partial<ApiResult<T>>
@@ -32,7 +45,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
       /* Handle gateway HTML and empty responses below. */
     }
     if (response.status === 401) {
-      const isAuthEndpoint = /^\/auth\//.test(path) || /^\/users\/(register|login\/password)$/.test(path)
+      const isAuthEndpoint =
+        /^\/auth\//.test(path) || /^\/users\/(register|login\/password)$/.test(path)
       if (!isAuthEndpoint && current) {
         session.clear()
         window.dispatchEvent(new Event('auth:expired'))
@@ -51,6 +65,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
               : '请求失败，请稍后重试'
       throw new ApiError(body?.message || fallback, body?.code || response.status, body?.traceId)
     }
+    if (responseType === 'csv') throw new ApiError('导出数据格式不正确，请重试', 0, body?.traceId)
     return body.data as T
   } catch (error) {
     if (error instanceof ApiError) throw error

@@ -9,6 +9,7 @@ vi.mock('../api/products', () => ({
     list: vi.fn(async () => ({ list: [], total: 0, pages: 0 })),
     options: vi.fn(async () => ({ categories: [], brands: [] })),
     save: vi.fn(async (_id: string | null, input: ProductInput) => ({ ...input })),
+    uploadImage: vi.fn(async (file: File) => ({ url: `/api/v1/media/products/${file.name}` })),
   },
 }))
 
@@ -149,4 +150,89 @@ it('preserves list filters when editing an existing product', async () => {
   await state.save()
   expect(productsApi.save).toHaveBeenCalledWith('42', expect.any(Object))
   expect(state.query.status).toBe('on_sale')
+})
+
+function upload(state: any, kind: 'cover' | 'detail', files: File[]) {
+  return state.uploadImages({ target: { files, value: 'selected' } }, kind)
+}
+const picture = (name: string) => new File(['picture'], name, { type: 'image/png' })
+
+it('uploads a cover and multiple ordered details, then saves the uploaded references', async () => {
+  const state = await editor()
+  await upload(state, 'cover', [picture('cover.png')])
+  await upload(state, 'detail', [picture('one.png'), picture('two.png')])
+  expect(state.form.coverUrl).toBe('/api/v1/media/products/cover.png')
+  state.moveDetailImage(1, -1)
+  await state.save()
+  expect(productsApi.save).toHaveBeenCalledWith(
+    null,
+    expect.objectContaining({
+      coverUrl: '/api/v1/media/products/cover.png',
+      detailImages: ['/api/v1/media/products/two.png', '/api/v1/media/products/one.png'],
+    }),
+  )
+})
+
+it('preserves existing images and completed uploads when a later upload fails', async () => {
+  const state = await editor()
+  state.form.coverUrl = '/existing-cover.png'
+  vi.mocked(productsApi.uploadImage).mockRejectedValueOnce(new Error('服务不可用'))
+  await upload(state, 'cover', [picture('cover.png')])
+  expect(state.form.coverUrl).toBe('/existing-cover.png')
+  state.form.detailImages = ['/existing-detail.png']
+  vi.mocked(productsApi.uploadImage)
+    .mockResolvedValueOnce({ url: '/first.png' })
+    .mockRejectedValueOnce(new Error('连接中断'))
+  await upload(state, 'detail', [picture('one.png'), picture('two.png')])
+  expect(state.form.detailImages).toEqual(['/existing-detail.png', '/first.png'])
+  expect(state.error).toContain('连接中断')
+  expect(state.busy).toBe(false)
+  expect(state.uploadStatus).toBe('')
+})
+
+it('prevents saving during uploads and allows retrying the same file', async () => {
+  const state = await editor()
+  let finish!: (value: { url: string }) => void
+  vi.mocked(productsApi.uploadImage).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const input = { files: [picture('cover.png')], value: 'selected' }
+  const pending = state.uploadImages({ target: input }, 'cover')
+  expect(input.value).toBe('')
+  expect(state.busy).toBe(true)
+  await state.save()
+  expect(productsApi.save).not.toHaveBeenCalled()
+  finish({ url: '/uploaded.png' })
+  await pending
+  expect(state.busy).toBe(false)
+  expect(state.form.coverUrl).toBe('/uploaded.png')
+})
+
+it('rejects excess details, invalid types and oversized images before uploading', async () => {
+  const state = await editor()
+  state.form.detailImages = Array.from({ length: 20 }, (_, index) => `/${index}.png`)
+  await upload(state, 'detail', [picture('extra.png')])
+  expect(state.error).toContain('最多 20 张')
+  await upload(state, 'cover', [new File(['<svg/>'], 'image.svg', { type: 'image/svg+xml' })])
+  expect(state.error).toContain('JPG、PNG 或 GIF')
+  await upload(state, 'cover', [
+    new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' }),
+  ])
+  expect(state.error).toContain('10MB')
+  expect(productsApi.uploadImage).not.toHaveBeenCalled()
+})
+
+it('removes details without affecting other images and preserves them in read-only mode', async () => {
+  const state = await editor()
+  state.form.detailImages = ['/one.png', '/two.png']
+  state.removeDetailImage(0)
+  expect(state.form.detailImages).toEqual(['/two.png'])
+  state.mode = 'detail'
+  state.removeDetailImage(0)
+  await upload(state, 'cover', [picture('cover.png')])
+  expect(state.form.detailImages).toEqual(['/two.png'])
+  expect(productsApi.uploadImage).not.toHaveBeenCalled()
 })

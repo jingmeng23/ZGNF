@@ -65,7 +65,8 @@ class MallIntegrationTests {
     @Test void filtersBeforePaginationUsingPublishedPriceAndInventory() throws Exception {
         mvc.perform(get("/api/v1/mall/products").param("categoryId","1").param("brandId","1").param("minPrice","70").param("maxPrice","80").param("inStock","true").param("attributes[气源]","天然气").param("size","1"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.list[0].price").value(75)).andExpect(jsonPath("$.data.list[0].availableStock").value(4));
+                .andExpect(jsonPath("$.data.list[0].price").value(75)).andExpect(jsonPath("$.data.list[0].availableStock").value(4))
+                .andExpect(jsonPath("$.data.list[0].skuCount").value(3));
         mvc.perform(get("/api/v1/mall/products").param("sort","sales").param("size","1"))
                 .andExpect(jsonPath("$.data.list[0].name").value("报警器")).andExpect(jsonPath("$.data.total").value(4));
         mvc.perform(get("/api/v1/mall/products").param("minPrice","100").param("maxPrice","10")).andExpect(status().isBadRequest());

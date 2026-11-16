@@ -11,7 +11,9 @@ public final class StatisticsVO {
             long refundedOrders,BigDecimal refundAmount,BigDecimal netReceivedAmount,long newCustomers) { }
     public record Overview(LocalDate startDate,LocalDate endDate,LocalDate previousStartDate,LocalDate previousEndDate,
             Metrics current,Metrics previous,BigDecimal receivedGrowthPercent,BigDecimal orderGrowthPercent,
-            long pendingWorkOrders,long overdueWorkOrders,Map<String,Long> orderStatuses,List<RecentOrder> recentOrders) { }
+            long pendingWorkOrders,long overdueWorkOrders,Map<String,Long> orderStatuses,List<RecentOrder> recentOrders,
+            Todos todos) { }
+    public record Todos(long paidOrders,long pendingAftersales,long pendingRefunds) { }
     public record RecentOrder(Long id,String orderNo,String status,BigDecimal payAmount,LocalDateTime createTime) { }
     public record Daily(LocalDate date,Metrics metrics) { }
     public record ProductSales(Long productId,String productName,long paidOrders,long quantity,BigDecimal merchandiseAmount) { }

@@ -12,6 +12,7 @@ ENV JAVA_TOOL_OPTIONS="-Duser.timezone=Asia/Shanghai"
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 COPY --from=build /app/target/gas-ecommerce-*.jar app.jar
+RUN mkdir -p /app/uploads/products && chown -R appuser:appgroup /app/uploads
 USER appuser
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

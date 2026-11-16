@@ -165,12 +165,14 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
         }
     }
 
-    /** 切换单件商品的选中状态。不改数量、不校验库存（取消勾选允许缺货商品保持勾选态，由结算页二次拦截）。 */
+    /** 仅可购买商品允许勾选；失效商品仍允许取消勾选，清除历史选中状态。 */
     @Override
     @Transactional
     public CartVO setSelected(Long userId, Long itemId, boolean selected) {
         lockActiveUser(userId);
         CartItem item = requireOwnedItem(userId, itemId);
+        if (selected && buildCart(userId).items().stream().noneMatch(view -> view.id().equals(itemId)))
+            throw new BusinessException("商品已失效，请刷新购物车后重选");
         item.setSelected(selected);
         updateById(item);
         return buildCart(userId);
@@ -178,15 +180,18 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
 
     /**
      * 全选 / 全不选。
-     * 使用 update(wrapper) 一条 SQL 批量更新，避免逐条 load → 逐条 update。
-     * 注意：此处手动设置了 updateTime，与其他方法依赖 MP 自动填充的策略不一致，需统一。
+     * 先清除全部选择，再按当前可购买条目批量勾选，避免历史失效商品进入结算。
      */
     @Override
     @Transactional
     public CartVO setAllSelected(Long userId, boolean selected) {
         lockActiveUser(userId);
+        List<Long> availableIds = selected ? buildCart(userId).items().stream().map(CartItemVO::id).toList() : List.of();
         update(null, Wrappers.<CartItem>lambdaUpdate().eq(CartItem::getUserId, userId)
-                .set(CartItem::getSelected, selected).set(CartItem::getUpdateTime, LocalDateTime.now()));
+                .set(CartItem::getSelected, false).set(CartItem::getUpdateTime, LocalDateTime.now()));
+        if (!availableIds.isEmpty())
+            update(null, Wrappers.<CartItem>lambdaUpdate().eq(CartItem::getUserId, userId).in(CartItem::getId, availableIds)
+                    .set(CartItem::getSelected, true).set(CartItem::getUpdateTime, LocalDateTime.now()));
         return buildCart(userId);
     }
 

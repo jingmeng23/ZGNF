@@ -18,6 +18,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 异常或错误码类型，用于统一表达程序处理失败的原因。
  */
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public Result<Void> uploadTooLarge(Exception ex) {
+        return Result.of(ErrorCode.PARAMETER_INVALID, "单张图片不能超过 10MB", null);
+    }
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> missingUpload(Exception ex) {
+        return Result.of(ErrorCode.PARAMETER_INVALID, "请选择要上传的商品图片", null);
+    }
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public Result<Void> notFound(Exception ex) { return Result.of(404, "接口不存在", null); }

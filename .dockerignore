@@ -3,3 +3,18 @@ target
 .git
 .idea
 *.log
+
+# The backend image only needs the Maven project and Java sources.
+frontend
+miniprogram
+artifacts
+docs
+scripts
+.vscode
+.agents
+.codex
+.aws
+.env
+.env.*
+secrets
+uploads

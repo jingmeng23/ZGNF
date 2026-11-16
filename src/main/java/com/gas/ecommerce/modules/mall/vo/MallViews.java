@@ -13,7 +13,7 @@ public final class MallViews {
     public record Review(long count, long positiveCount, BigDecimal averageRating) { }
     public record Card(Long id, Long categoryId, Long brandId, String name, String subtitle, String coverUrl,
             BigDecimal price, BigDecimal originalPrice, long sales, long availableStock,
-            String status, String statusMessage, boolean purchasable, String brandName) { }
+            String status, String statusMessage, boolean purchasable, String brandName, long skuCount) { }
     public record Detail(Card product, List<String> mainImages, String description, List<String> detailImages,
             List<String> servicePromises, Review review, Map<String,List<String>> attributes, Matrix matrix) { }
     public record StableDetail(String name,String subtitle,String coverUrl,Long categoryId,Long brandId,

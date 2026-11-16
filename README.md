@@ -1,14 +1,34 @@
-# gas-ecommerce
+# 自贡能发商城
 
-微信小程序客户端位于 [miniprogram](miniprogram/README.md)，支付配置、账号绑定和上线步骤见 [微信小程序接入说明](docs/wechat-mini-program.md)。
+微信小程序客户端位于 [miniprogram](miniprogram/README.md)，支付配置、账号绑定和上线步骤见 [微信小程序接入说明](docs/guides/wechat-mini-program.md)。
 
 燃气智能服务电商后端框架，Java 25（已在 OpenJDK 25.0.2 验证）、Spring Boot 3.5.16、Maven。
 
-前端管理框架位于 [frontend](frontend/README.md)，使用 Vue 3 + TypeScript + Vite，包含经营总览及 11 个管理模块。启动后访问 `http://localhost:5173/#/admin`；默认展示演示数据，管理员授权及业务接口待后端继续实现。
+Web 商城和管理后台位于 [frontend](frontend/README.md)，使用 Vue 3 + TypeScript + Vite，并包含 Capacitor Android 工程。启动后访问 `http://localhost:5173/#/admin`；演示模式及真实接口配置见前端说明，业务接入范围见 [模块 API 对照](docs/api/module-api-map.md)。
+
+## 目录与文档
+
+```text
+src/main/               Java 后端、配置、数据库迁移
+src/test/               后端测试
+frontend/               Web 商城、管理后台与 Android 工程
+miniprogram/            微信原生小程序
+scripts/                项目维护、业务检查、压测与手工 SQL
+docs/                   API、指南、架构、历史记录与学习笔记
+artifacts/              本地报告、备份与交付包（忽略提交）
+.mvn/                   Maven 项目配置
+```
+
+从 [文档索引](docs/README.md) 查找业务说明；目录约定、清理范围与恢复方式见 [项目目录与维护](docs/guides/repository-layout.md)。
+
+```shell
+node scripts/clean.mjs          # 预览可清理的生成文件
+node scripts/clean.mjs --apply  # 执行清理
+```
 
 ## 构建
 
-Java 初学者可先阅读 [新手阅读指南](docs/新手阅读指南.md)，其中按短信登录请求顺序解释了项目分层和核心组件。
+Java 初学者可先阅读 [新手阅读指南](docs/guides/新手阅读指南.md)，其中按短信登录请求顺序解释了项目分层和核心组件。
 
 ```shell
 mvn clean compile
@@ -46,32 +66,6 @@ JWT HS256 密钥至少 32 字节。加密密钥应稳定保存，变更时需要
 OSS 默认禁用；启用时设置 `aliyun.oss.enabled=true` 及 `OSS_ENDPOINT`、`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET`。
 CORS 默认允许 localhost:5173 与 localhost:3000，可通过 `app.cors.allowed-origins` 设置逗号分隔的来源。
 
-## 实现范围
+## 业务文档
 
-员工管理已接入专用页面 `/#/admin/employees`，支持档案维护、部门/岗位归属、筛选分页、启停用、删除、角色授权和密码重置，沿用管理员及工单保护，详见 [员工管理与前后端对接](docs/employee-management.md)。
-
-商品管理已接入专用前端页面，支持新增、编辑、详情、上下架、删除、分类与状态筛选、排序和分页；商品表单提供分类/品牌选项及分类快速新增，详见 [商品管理与前后端对接](docs/product-management.md)。
-
-分类管理入口 `/#/admin/categories`，支持树形查看、搜索筛选、增删改查、层级调整、排序、启停、关联商品统计与跳转；后端校验环路、同级重名、启停依赖和删除保护，详见 [分类管理与前后端对接](docs/category-management.md)。
-
-订单管理已接入专用运营页面，支持订单筛选、详情、付款/状态/物流查看、开始处理、关闭待付款、发货、内部备注、操作记录和本页导出；用户订单页支持详情、物流、取消及确认完成，详见 [订单管理补齐功能](docs/order-management.md)。
-
-经营总览与统计报表已完成核心指标、上期比较、每日趋势、商品销量排行、日报分页及 CSV 导出，详见 [统计报表 API](docs/statistics-api.md)。
-
-服务工单已完成用户预约、派单改派、员工处理完结、取消及操作日志，详见 [服务工单 API](docs/work-order-api.md)。
-
-优惠券已完成管理、领券、订单优惠、支付核销和取消返还，详见 [优惠券 API](docs/coupon-api.md)。
-
-售后管理已接入专用管理页面 `/#/admin/aftersales` 和用户页面 `/#/aftersales`，支持整单退款申请、撤销、审核、渠道退款登记、订单筛选和操作追溯，详见 [售后管理与前后端对接](docs/aftersale-management.md)。上线需执行 `V1.23` 迁移；当前登记渠道结果，不直接调用第三方退款接口。
-
-商品库存已完成库存查询、建档、入库、出库、盘点调整及流水查询，支持订单锁定保护和幂等变更，详见 [商品库存 API](docs/inventory-api.md)。
-库存管理前端入口 `/#/admin/inventory` 已连接真实接口，支持商品/仓库选项、库存分页筛选、低库存提示、入出库、盘点和单条库存流水追踪，详见 [库存管理与前后端对接](docs/inventory-management.md)。
-
-当前已提供认证、用户地址、商品分类、购物车、订单、本地支付记录与回调、售后及运营管理业务接口。员工、角色权限管理已补齐分页查询、资料维护、状态调整及授权接口，详见 [组织管理 API](docs/organization-api.md)。用户完整资料、第三方支付渠道及真实支付对账等仍需扩展。
-已实现 JWT 安全链、统一响应/异常、全链路 traceId、Redis 幂等、权限注解、操作耗时日志、分页类型、自动填充、乐观锁、逻辑删除、订单/支付编号、AES-GCM/BCrypt、RabbitMQ 延迟队列、优惠券过期和订单超时条件取消。
-
-业务扩展项：完整订单/库存事务（含超时库存释放）、第三方支付签名验签与回调、真实支付对账、短信厂商消费者、员工角色授权加载、操作日志数据库持久化、用户完整资料/地址接口、商品和订单等业务 API。支付对账任务会明确记录未配置适配器，不会报告虚假的对账成功。
-
-枚举使用小写英文值；金额为 BigDecimal；实体 Long ID 输出字符串，响应 timestamp 为数值。分页 page 从 1 开始，size 默认 20、上限 100；排序列通过显式白名单映射。
-
-Docker 镜像标签按 JDK 25 编写；当前开发机未安装 Docker，尚未验证镜像拉取及容器集成。运行镜像以非 root 用户启动。
+各模块的接口与权限见 [模块 API 对照](docs/api/module-api-map.md)，业务操作、架构及客户端接入说明统一从 [文档索引](docs/README.md) 进入。第三方服务和生产环境的接入状态请查阅对应模块说明，并以实际环境验收为准。

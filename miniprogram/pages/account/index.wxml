@@ -1,1 +1,68 @@
-<view class="page"><view class="hero"><view class="eyebrow">MY WARM HOME</view><view class="title">{{user ? (user.nickname || '商城用户') : '欢迎来到自贡能发'}}</view><view class="muted">让每一份温暖，安心抵达。</view></view><view wx:if="error" class="error">{{error}}</view><button wx:if="!user" bindtap="login">登录 / 注册</button><view class="card"><button class="secondary" data-page="orders" bindtap="open">我的订单 · 继续付款</button><button class="secondary" data-page="addresses" bindtap="open">我的收货地址</button><button class="secondary" data-page="coupons" bindtap="open">领券中心 / 我的优惠券</button><button class="secondary" data-page="services" bindtap="open">上门服务预约</button><button class="secondary" data-page="aftersales" bindtap="open">退款与售后</button><button wx:if="user" class="secondary" bindtap="login">绑定微信</button></view><button wx:if="user" class="secondary" bindtap="logout">退出登录</button></view>
+<view class="account-page">
+  <view class="account-header">
+    <view class="brand-label">自贡能发</view>
+    <button class="profile-button" bindtap="profile" hover-class="account-pressed" aria-label="{{authenticated ? '查看和编辑个人资料' : '登录或注册'}}">
+      <view class="avatar">
+        <image wx:if="{{avatar}}" class="avatar-image" src="{{avatar}}" mode="aspectFill" binderror="avatarError" />
+        <image wx:else class="avatar-placeholder" src="/assets/account/user.png" mode="aspectFit" />
+      </view>
+      <view class="profile-copy">
+        <view class="profile-name">{{authenticated ? ((user && user.nickname) || '商城用户') : '登录 / 注册'}}</view>
+        <view class="profile-description">{{authenticated ? (loading && !user ? '正在加载个人资料…' : '查看与编辑个人资料') : '登录后查看订单、收藏与售后'}}</view>
+      </view>
+      <view class="chevron" aria-hidden="true"></view>
+    </button>
+  </view>
+
+  <view wx:if="{{error}}" class="profile-error" role="alert">
+    <text class="error-copy">个人资料加载失败，{{user ? '暂时显示上次资料' : '请检查网络后重试'}}</text>
+    <button class="retry-button" bindtap="loadProfile" loading="{{loading}}" disabled="{{loading}}">重试</button>
+  </view>
+
+  <view class="account-card">
+    <view class="card-heading">
+      <view class="card-title">我的订单</view>
+      <button class="all-orders" data-key="orders" bindtap="open" hover-class="account-pressed">全部订单<view class="chevron" aria-hidden="true"></view></button>
+    </view>
+    <view class="shortcut-grid">
+      <button wx:for="{{orders}}" wx:key="key" class="shortcut" data-key="{{item.key}}" bindtap="open" hover-class="account-pressed">
+        <image class="shortcut-icon" src="/assets/account/{{item.icon}}.png" mode="aspectFit" aria-hidden="true" />
+        <text>{{item.name}}</text>
+      </button>
+    </view>
+  </view>
+
+  <view class="account-card">
+    <view class="card-heading"><view class="card-title">常用功能</view></view>
+    <view class="shortcut-grid">
+      <button wx:for="{{tools}}" wx:key="key" class="shortcut" data-key="{{item.key}}" bindtap="open" hover-class="account-pressed">
+        <image class="shortcut-icon" src="/assets/account/{{item.icon}}.png" mode="aspectFit" aria-hidden="true" />
+        <text>{{item.name}}</text>
+      </button>
+    </view>
+    <button wx:if="{{authenticated && user && user.points != null}}" class="points-summary" data-key="points" bindtap="open" hover-class="account-pressed">当前积分 <text class="points-value">{{user.points}}</text><text class="points-link">查看明细</text><view class="chevron" aria-hidden="true"></view></button>
+    <view class="service-list">
+      <button wx:for="{{services}}" wx:key="key" class="menu-row" data-key="{{item.key}}" bindtap="open" hover-class="account-pressed">
+        <image class="row-icon" src="/assets/account/{{item.icon}}.png" mode="aspectFit" aria-hidden="true" />
+        <text class="menu-label">{{item.name}}</text>
+        <view class="chevron" aria-hidden="true"></view>
+      </button>
+    </view>
+  </view>
+
+  <view class="account-card settings-card">
+    <button class="menu-row" bindtap="toggleSettings" hover-class="account-pressed" aria-expanded="{{settingsOpen}}" aria-label="{{settingsOpen ? '收起账户设置' : '展开账户设置'}}">
+      <image class="row-icon" src="/assets/account/settings.png" mode="aspectFit" aria-hidden="true" />
+      <text class="menu-label">账户设置</text>
+      <text class="row-hint">{{settingsOpen ? '收起' : '密码、隐私等'}}</text>
+      <view class="chevron {{settingsOpen ? 'chevron-up' : 'chevron-down'}}" aria-hidden="true"></view>
+    </button>
+    <view wx:if="{{settingsOpen}}" class="settings-list">
+      <button wx:for="{{settings}}" wx:key="key" class="menu-row settings-row" data-key="{{item.key}}" bindtap="open" hover-class="account-pressed">
+        <text class="menu-label">{{item.name}}</text><view class="chevron" aria-hidden="true"></view>
+      </button>
+      <button wx:if="{{authenticated}}" class="logout-button" bindtap="logout" loading="{{loggingOut}}" disabled="{{loggingOut}}" hover-class="account-pressed">退出登录</button>
+    </view>
+  </view>
+  <button class="staff-entry" bindtap="manage" hover-class="account-pressed">员工工作台<view class="chevron" aria-hidden="true"></view></button>
+</view>

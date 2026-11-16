@@ -43,7 +43,11 @@ public class StatisticsService {
         long open=count("SELECT COUNT(*) FROM work_order WHERE is_deleted=0 AND status IN ('pending','accepted','processing')");
         long overdue=count("SELECT COUNT(*) FROM work_order WHERE is_deleted=0 AND status IN ('pending','accepted','processing') AND appointment_time<?",now);
         var recent=db.query("SELECT id,order_no,status,pay_amount,create_time FROM `order` WHERE is_deleted=0 AND create_time>=? AND create_time<? ORDER BY create_time DESC,id DESC LIMIT 10",(rs,n)->new RecentOrder(rs.getLong("id"),rs.getString("order_no"),rs.getString("status"),rs.getBigDecimal("pay_amount"),rs.getTimestamp("create_time").toLocalDateTime()),r.from(),r.to());
-        return new Overview(r.start,r.end,previous.start,previous.end,current,prior,growth(current.receivedAmount(),prior.receivedAmount()),growth(BigDecimal.valueOf(current.createdOrders()),BigDecimal.valueOf(prior.createdOrders())),open,overdue,statuses,recent);
+        Todos todos=new Todos(
+                count("SELECT COUNT(*) FROM `order` WHERE is_deleted=0 AND status='paid'"),
+                count("SELECT COUNT(*) FROM aftersale WHERE is_deleted=0 AND status='pending'"),
+                count("SELECT COUNT(*) FROM aftersale WHERE is_deleted=0 AND status='approved'"));
+        return new Overview(r.start,r.end,previous.start,previous.end,current,prior,growth(current.receivedAmount(),prior.receivedAmount()),growth(BigDecimal.valueOf(current.createdOrders()),BigDecimal.valueOf(prior.createdOrders())),open,overdue,statuses,recent,todos);
     }
     private Metrics metrics(Range r) {
         long orders=count("SELECT COUNT(*) FROM `order` WHERE is_deleted=0 AND create_time>=? AND create_time<?",r.from(),r.to());

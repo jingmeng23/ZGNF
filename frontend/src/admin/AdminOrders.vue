@@ -19,18 +19,36 @@ import {
   type OrderOperation,
 } from '../api/orders'
 import { ApiError } from '../api/http'
+import { useRoute } from 'vue-router'
 import { toCsv } from './csv'
 const rows = ref<OrderRecord[]>([]),
   total = ref(0),
   pages = ref(0)
+const route = useRoute()
+function queryString(key: string) {
+  return typeof route.query[key] === 'string' ? route.query[key] : ''
+}
+function orderDate(key: 'startTime' | 'endTime') {
+  const value = queryString(key)
+  const match = /^(\d{4}-\d{2}-\d{2})T(00:00:00|23:59:59)$/.exec(value)
+  if (!match) return ''
+  const date = match[1]
+  const timestamp = Date.parse(`${date}T00:00:00Z`)
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== date) return ''
+  return value
+}
 const query = reactive({
   page: 1,
   size: 10,
-  orderNo: '',
-  status: '',
+  orderNo: queryString('orderNo'),
+  status: ['pending_payment', 'paid', 'processing', 'completed', 'cancelled', 'refunded'].includes(
+    queryString('status'),
+  )
+    ? queryString('status')
+    : '',
   userId: '',
-  startTime: '',
-  endTime: '',
+  startTime: orderDate('startTime'),
+  endTime: orderDate('endTime'),
 })
 const loading = ref(false),
   detailLoading = ref(false),
@@ -110,6 +128,28 @@ function search() {
   else void load()
 }
 watch(() => query.page, load)
+watch(
+  () => [route.query.orderNo, route.query.status, route.query.startTime, route.query.endTime],
+  () => {
+    Object.assign(query, {
+      orderNo: queryString('orderNo'),
+      status: [
+        'pending_payment',
+        'paid',
+        'processing',
+        'completed',
+        'cancelled',
+        'refunded',
+      ].includes(queryString('status'))
+        ? queryString('status')
+        : '',
+      startTime: orderDate('startTime'),
+      endTime: orderDate('endTime'),
+      userId: '',
+    })
+    search()
+  },
+)
 onMounted(load)
 onUnmounted(() => {
   listVersion++

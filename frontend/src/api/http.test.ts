@@ -20,6 +20,20 @@ const response = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 
 describe('backend response handling', () => {
+  it('sends multipart uploads with authentication and lets fetch set the boundary', async () => {
+    session.write('admin-token', 3600)
+    const body = new FormData()
+    body.append('file', new File(['image'], 'cover.png', { type: 'image/png' }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(response({ code: 200, data: { url: '/api/v1/media/products/cover.png' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    await request('/admin/products/images', { method: 'POST', body })
+    const options = fetchMock.mock.calls[0][1]
+    expect(options.body).toBe(body)
+    expect(options.headers.get('Authorization')).toBe('Bearer admin-token')
+    expect(options.headers.has('Content-Type')).toBe(false)
+  })
   it('sends the access token and keeps Java Long IDs as strings', async () => {
     session.write('access-token', 3600)
     const fetchMock = vi

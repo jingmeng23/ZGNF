@@ -24,7 +24,8 @@ public class CatalogReadService {
     private static final String FROM = " FROM product p JOIN product_published_price q ON q.product_id=p.id"
             + " JOIN product_available_stock a ON a.product_id=p.id"
             + " LEFT JOIN brand b ON b.id=p.brand_id AND b.is_deleted=0";
-    private static final String SELECT = "SELECT p.*,q.price display_price,a.available,b.name brand_name";
+    private static final String SELECT = "SELECT p.*,q.price display_price,a.available,b.name brand_name,"
+            + "(SELECT COUNT(*) FROM product_sku s WHERE s.product_id=p.id) sku_count";
     public static final Set<String> PUBLIC = Set.of("on_sale","off_sale","sold_out","presale","scheduled");
     public static String status(String state, long stock) {
         return "on_sale".equals(state) && stock==0 ? "sold_out" : state;
@@ -38,7 +39,7 @@ public class CatalogReadService {
         long stock=r.getLong("available"); String state=status(r.getString("status"),stock);
         return new Card(r.getLong("id"),r.getLong("category_id"),r.getObject("brand_id",Long.class),
                 r.getString("name"),r.getString("subtitle"),r.getString("cover_url"),r.getBigDecimal("display_price"),
-                null,r.getLong("sales"),stock,state,message(state),"on_sale".equals(state)&&stock>0,r.getString("brand_name"));
+                null,r.getLong("sales"),stock,state,message(state),"on_sale".equals(state)&&stock>0,r.getString("brand_name"),r.getLong("sku_count"));
     };
 
     public PageResult<Card> list(MallQuery query) { return list(query,null); }

@@ -1,12 +1,49 @@
 {
-  "pages": ["pages/home/index", "pages/catalog/index", "pages/product/index", "pages/cart/index", "pages/account/index", "pages/login/index", "pages/checkout/index", "pages/orders/index", "pages/order/index", "pages/addresses/index", "pages/coupons/index", "pages/services/index", "pages/aftersales/index"],
-  "window": { "navigationBarTitleText": "自贡能发", "navigationBarBackgroundColor": "#173e35", "navigationBarTextStyle": "white", "backgroundColor": "#f5f7f4" },
-  "tabBar": { "color": "#738077", "selectedColor": "#173e35", "list": [
-    { "pagePath": "pages/home/index", "text": "首页" },
-    { "pagePath": "pages/catalog/index", "text": "商城" },
-    { "pagePath": "pages/cart/index", "text": "购物车" },
-    { "pagePath": "pages/account/index", "text": "我的" }
-  ] },
+  "pages": [
+    "pages/home/index",
+    "pages/catalog/index",
+    "pages/product/index",
+    "pages/cart/index",
+    "pages/account/index",
+    "pages/login/index",
+    "pages/checkout/index",
+    "pages/orders/index",
+    "pages/order/index",
+    "pages/addresses/index",
+    "pages/coupons/index",
+    "pages/services/index",
+    "pages/aftersales/index",
+    "pages/manage/index",
+    "pages/personal/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "自贡能发",
+    "navigationBarBackgroundColor": "#163f35",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f7f4"
+  },
+  "tabBar": {
+    "color": "#738077",
+    "selectedColor": "#163f35",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/catalog/index",
+        "text": "分类"
+      },
+      {
+        "pagePath": "pages/cart/index",
+        "text": "购物车"
+      },
+      {
+        "pagePath": "pages/account/index",
+        "text": "我的"
+      }
+    ]
+  },
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

@@ -1,6 +1,6 @@
 import { request } from './http'
 import type { Category, PageResult, Product } from './types'
-export interface CatalogQuery { page?: number; size?: number; keyword?: string; categoryId?: string; sort?: string; order?: string }
+export interface CatalogQuery { page?: number; size?: number; keyword?: string; categoryId?: string; sort?: string; order?: string; minPrice?: string; maxPrice?: string }
 
 export const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
@@ -15,12 +15,12 @@ export const catalogApi = {
   async list(query: CatalogQuery = {}): Promise<PageResult<Product>> {
     const page = query.page || 1, size = query.size || 12
     if (demoMode) {
-      const rows = demoProducts.filter(p => (!query.keyword || p.name.includes(query.keyword)) && (!query.categoryId || (query.categoryId === 'accessories' ? ['demo-3', 'demo-4'].includes(p.id) : p.id === query.categoryId)))
+      const rows = demoProducts.filter(p => (!query.keyword || `${p.name} ${p.subtitle}`.includes(query.keyword)) && (!query.categoryId || (query.categoryId === 'accessories' ? ['demo-3', 'demo-4'].includes(p.id) : p.id === query.categoryId)) && (!query.minPrice || p.price >= Number(query.minPrice)) && (!query.maxPrice || p.price <= Number(query.maxPrice)))
       if (query.sort === 'price' || query.sort === 'sales') rows.sort((a, b) => (Number(a[query.sort as 'price' | 'sales']) - Number(b[query.sort as 'price' | 'sales'])) * (query.order === 'asc' ? 1 : -1))
       return { list: rows.slice((page - 1) * size, page * size), total: rows.length, page, size, pages: Math.ceil(rows.length / size) }
     }
     const params = new URLSearchParams({ page: String(page), size: String(size) })
-    for (const key of ['keyword', 'categoryId', 'sort', 'order'] as const) if (query[key]) params.set(key, query[key]!)
+    for (const key of ['keyword', 'categoryId', 'sort', 'order', 'minPrice', 'maxPrice'] as const) if (query[key]) params.set(key, query[key]!)
     return request<PageResult<Product>>(`/mall/products?${params}`)
   },
   async categories(): Promise<Category[]> {

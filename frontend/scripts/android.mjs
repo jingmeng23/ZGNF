@@ -61,7 +61,7 @@ run('npm', ['run', 'build', '--', '--mode', 'android'])
 run('npx', ['cap', 'sync', 'android'])
 if (buildApk || release) {
   if (release && !existsSync(new URL('../android/keystore.properties', import.meta.url)))
-    throw new Error('正式签名需要 android/keystore.properties，请参阅 docs/android-app.md。')
+    throw new Error('正式签名需要 android/keystore.properties，请参阅 docs/guides/android-app.md。')
   const localGradle = join(
     root,
     '.gradle-runtime',

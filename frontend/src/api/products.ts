@@ -37,6 +37,11 @@ export interface ProductQuery {
   order: string
 }
 export const productsApi = {
+  uploadImage: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request<{ url: string }>('/admin/products/images', { method: 'POST', body }, 60000)
+  },
   list: (query: ProductQuery) => {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(query))

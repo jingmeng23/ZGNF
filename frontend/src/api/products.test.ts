@@ -100,3 +100,15 @@ it('creates categories through the category owner endpoint', async () => {
   expect(fetchMock.mock.calls[0][1].method).toBe('POST')
   expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(input)
 })
+
+it('uploads the actual image as a multipart file instead of a JSON address', async () => {
+  const fetchMock = mockFetch()
+  const file = new File(['image bytes'], 'cover.png', { type: 'image/png' })
+  await productsApi.uploadImage(file)
+  const [url, options] = fetchMock.mock.calls[0]
+  expect(url).toBe('/api/v1/admin/products/images')
+  expect(options.method).toBe('POST')
+  expect(options.body).toBeInstanceOf(FormData)
+  expect(options.body.get('file')).toBe(file)
+  expect(options.headers.has('Content-Type')).toBe(false)
+})

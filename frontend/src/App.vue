@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
   Flame,
@@ -19,6 +19,8 @@ const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const isAdmin = computed(() => route.path.startsWith('/admin'))
+const isShopping = computed(() => route.path === '/catalog' || route.path === '/cart' || route.path.startsWith('/products/'))
+const hasPurchaseBar = computed(() => route.path === '/cart' || route.path.startsWith('/products/'))
 const links = [
   { to: '/', label: '首页', icon: House },
   { to: '/catalog', label: '好物商城', icon: Grid2X2 },
@@ -36,13 +38,13 @@ function expired() {
     void router.replace({ path: '/login', query: { redirect: current.fullPath } })
 }
 onMounted(() => window.addEventListener('auth:expired', expired))
-onMounted(() => { if (auth.authenticated) void cart.refresh() })
+watch(() => auth.authenticated, authenticated => { if (authenticated) void cart.refresh().catch(() => {}); else cart.reset() }, { immediate: true })
 onUnmounted(() => window.removeEventListener('auth:expired', expired))
 </script>
 
 <template>
   <AdminApp v-if="isAdmin" />
-  <div v-else class="app-shell">
+  <div v-else class="app-shell" :class="{ 'shopping-shell': isShopping }">
     <aside class="sidebar">
       <RouterLink to="/" class="brand"
         ><span class="brand-mark"><Flame :size="26" /></span
@@ -71,7 +73,7 @@ onUnmounted(() => window.removeEventListener('auth:expired', expired))
       <p class="sidebar-bottom">自贡能发 · 智慧生活服务平台<small>用心服务每一个温暖的家</small></p>
     </aside>
     <main id="main-content" class="main"><RouterView /></main>
-    <nav class="bottom-nav" aria-label="移动端导航">
+    <nav v-if="!hasPurchaseBar" class="bottom-nav" aria-label="移动端导航">
       <RouterLink v-for="link in links" :key="link.to" :to="link.to" exact-active-class="active" :class="{ active: link.to === '/account' && route.path === '/addresses' }"
         ><span
           ><component :is="link.icon" :size="21" /><b

@@ -1,1 +1,74 @@
-<view class="page"><view class="hero"><view class="eyebrow">WARM HOME · BETTER LIFE</view><view class="title"><view>安心用气，</view><view>温暖到家。</view></view><view class="muted">品质好物与专业上门服务</view><button class="secondary" bindtap="catalog">探索商城</button></view><button class="secondary" bindtap="services">安装 · 维修 · 安全检查预约</button><view class="section">为家精选</view><view wx:if="error" class="error" bindtap="load">{{error}} · 点击重试</view><view wx:if="loading" class="empty">正在加载…</view><view class="grid"><view wx:for="products" wx:key="id" class="card" data-id="{{item.id}}" bindtap="product"><image wx:if="item.image" src="{{item.image}}" class="image" mode="aspectFit"/><view>{{item.name}}</view><view class="muted">{{item.subtitle}}</view><view class="price">¥{{item.price}}</view></view></view></view>
+<view class="home">
+  <view class="brand-row">
+    <view class="brand-mark" aria-hidden="true">能</view>
+    <view class="brand-copy">
+      <text class="brand-name">自贡能发</text>
+      <text class="brand-caption">燃气设备 · 生活好物</text>
+    </view>
+  </view>
+
+  <view class="search-bar">
+    <view class="search-icon" aria-hidden="true"></view>
+    <input class="search-input" placeholder="搜索燃气灶、热水器、生活用品" value="{{keyword}}" maxlength="100" confirm-type="search" bindinput="input" bindconfirm="search" aria-label="搜索商品" />
+    <button class="search-submit" bindtap="search" hover-class="button-pressed">搜索</button>
+  </view>
+
+  <button class="theme-banner {{bannerImage ? 'with-image' : ''}}" bindtap="banner" hover-class="banner-pressed" aria-label="{{bannerTarget && bannerTarget.productId ? '查看横幅推荐商品' : '进入商城选购商品'}}">
+    <view class="banner-decoration decoration-one" aria-hidden="true"></view>
+    <view class="banner-decoration decoration-two" aria-hidden="true"></view>
+    <view class="banner-copy">
+      <text class="banner-kicker">自贡能发 · 好物商城</text>
+      <view class="banner-title"><text>燃气好设备</text><text>生活好帮手</text></view>
+      <view class="banner-action">{{bannerTarget && bannerTarget.productId ? '查看商品' : '去选购'}}<view class="chevron" aria-hidden="true"></view></view>
+    </view>
+    <image wx:if="{{bannerImage}}" class="banner-image" src="{{bannerImage}}" mode="aspectFit" binderror="bannerError" aria-hidden="true" />
+  </button>
+
+  <view class="section-heading">
+    <view class="section-title">商品推荐</view>
+    <button class="view-all" bindtap="catalog" hover-class="button-pressed">全部商品<view class="chevron" aria-hidden="true"></view></button>
+  </view>
+
+  <view wx:if="{{error}}" class="home-error" role="alert">
+    <view class="error-copy"><text>商品暂时加载失败</text><text class="error-detail">{{products.length ? '暂时显示上次商品，可重试更新' : error}}</text></view>
+    <button class="retry-button" bindtap="retryProducts" disabled="{{loading}}" loading="{{loading}}">重试</button>
+  </view>
+  <view wx:if="{{actionError}}" class="action-error" role="alert">{{actionError}}</view>
+
+  <view wx:if="{{loading && !products.length}}" class="product-grid" aria-label="正在加载商品">
+    <view wx:for="{{skeletons}}" wx:key="*this" class="product-card skeleton-card" aria-hidden="true">
+      <view class="product-media skeleton"></view><view class="skeleton-line skeleton"></view><view class="skeleton-line short skeleton"></view>
+    </view>
+  </view>
+  <view wx:elif="{{!products.length && !error}}" class="home-empty">
+    <text class="empty-title">商品正在准备中</text>
+    <text class="empty-note">可以先逛逛商城，看看其他商品</text>
+    <button class="empty-button" bindtap="catalog">逛逛商城</button>
+  </view>
+  <view wx:elif="{{products.length}}" class="product-grid">
+    <view wx:for="{{products}}" wx:key="id" class="product-card" data-id="{{item.id}}" bindtap="product" role="button" aria-label="{{item.name}}，查看商品详情" hover-class="card-pressed">
+      <view class="product-media">
+        <image wx:if="{{item.image && !failedImages[item.id]}}" class="product-image" src="{{item.image}}" mode="aspectFit" lazy-load="{{index > 1}}" data-id="{{item.id}}" binderror="imageError" />
+        <view wx:else class="image-fallback">图片暂缺</view>
+        <text wx:if="{{!item.purchasable}}" class="unavailable-badge">暂不可购</text>
+      </view>
+      <view class="product-info">
+        <view class="product-name">{{item.name}}</view>
+        <view class="product-subtitle">{{item.subtitle || item.brandName || '查看商品详情'}}</view>
+        <view class="product-bottom">
+          <view wx:if="{{item.priceText}}" class="price-line"><text class="currency">¥</text><text class="product-price">{{item.priceText}}</text></view>
+          <text wx:else class="price-pending">价格待确认</text>
+          <button wx:if="{{item.purchasable && item.priceText}}" class="product-action {{item.needsSpec ? 'spec-action' : ''}}" data-id="{{item.id}}" catchtap="buy" loading="{{addBusy === '' + item.id}}" disabled="{{!!addBusy}}" aria-label="{{item.name}}，{{item.needsSpec ? '选择规格' : '加入购物车'}}" hover-class="button-pressed">{{item.needsSpec ? '选规格' : '加购'}}</button>
+          <text wx:else class="unavailable-label">{{item.purchasable ? '查看详情' : '暂不可购'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <button class="service-entry" bindtap="services" hover-class="button-pressed">
+    <view class="service-icon"><image src="/assets/account/calendar.png" mode="aspectFit" aria-hidden="true" /></view>
+    <view class="service-copy"><text class="service-title">安装、维修等服务</text><text class="service-note">查看当前可预约的服务项目</text></view>
+    <view class="chevron" aria-hidden="true"></view>
+  </button>
+  <view class="home-footer">自贡能发 · 好设备，好生活</view>
+</view>

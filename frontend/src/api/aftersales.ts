@@ -49,16 +49,20 @@ export interface AftersaleQuery {
   status: string
   aftersaleNo: string
   orderNo: string
+  sort?: 'createTime' | 'updateTime' | 'id' | 'amount'
+  order?: 'asc' | 'desc'
 }
 function params(query: AftersaleQuery) {
   const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(query)) if (value !== '') search.set(key, String(value))
+  for (const [key, value] of Object.entries(query))
+    if (value !== '' && value != null) search.set(key, String(value))
   return search
 }
 const adminPath = (id: string) => `/admin/aftersales/${encodeURIComponent(id)}`
 const userPath = (id: string) => `/aftersales/${encodeURIComponent(id)}`
 export const adminAftersalesApi = {
-  wechatRefund: (id: string) => request<AftersaleRecord>(`${adminPath(id)}/wechat-refund`, { method: 'POST' }),
+  wechatRefund: (id: string) =>
+    request<AftersaleRecord>(`${adminPath(id)}/wechat-refund`, { method: 'POST' }),
   list: (query: AftersaleQuery) =>
     request<PageResult<AftersaleRecord>>(`/admin/aftersales?${params(query)}`),
   detail: (id: string) => request<AftersaleRecord>(adminPath(id)),

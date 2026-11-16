@@ -43,8 +43,38 @@ it('connects admin filters and encodes order and aftersale numbers', async () =>
 })
 it('loads own applications without sending empty status filters', async () => {
   const fetchMock = mockFetch()
-  await userAftersalesApi.list({ page: 1, size: 20, status: '', aftersaleNo: '', orderNo: '' })
+  await userAftersalesApi.list({
+    page: 1,
+    size: 20,
+    status: '',
+    aftersaleNo: '',
+    orderNo: '',
+    sort: undefined,
+    order: undefined,
+  })
   expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/aftersales?page=1&size=20')
+})
+it('sends supported server-side sort parameters', async () => {
+  const fetchMock = mockFetch()
+  await adminAftersalesApi.list({
+    page: 1,
+    size: 10,
+    status: '',
+    aftersaleNo: '',
+    orderNo: '',
+    sort: 'amount',
+    order: 'asc',
+  })
+  const url = new URL(fetchMock.mock.calls[0][0], 'http://localhost')
+  expect(url.searchParams.get('sort')).toBe('amount')
+  expect(url.searchParams.get('order')).toBe('asc')
+})
+it('uses the dedicated WeChat refund endpoint without submitting a manual refund reference', async () => {
+  const fetchMock = mockFetch()
+  await adminAftersalesApi.wechatRefund('9007199254740993')
+  expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/admin/aftersales/9007199254740993/wechat-refund')
+  expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST' }))
+  expect(fetchMock.mock.calls[0][1].body).toBeUndefined()
 })
 it('preserves Long order IDs and the application idempotency key, never specifying a refund amount', async () => {
   const fetchMock = mockFetch()

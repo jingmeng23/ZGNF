@@ -1,0 +1,33 @@
+<view class="page">
+  <view class="title">{{title}}</view><scroll-view scroll-x><view style="display:flex;gap:12rpx;white-space:nowrap"><button wx:for="{{tabs}}" wx:key="key" class="{{tab === item.key ? 'small' : 'secondary small'}}" data-key="{{item.key}}" bindtap="changeTab" disabled="{{busy}}">{{item.title}}</button></view></scroll-view>
+  <view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
+  <view wx:if="{{tab === 'profile'}}" class="card">
+    <view wx:if="{{user}}" class="muted">用户编号 {{user.id}} · 会员等级 {{user.memberLevel || '—'}} · 积分 {{user.points || 0}}</view>
+    <view class="label">昵称</view><input value="{{form.nickname}}" data-key="nickname" bindinput="input" maxlength="100" disabled="{{busy}}"/>
+    <view class="label">头像图片地址</view><input value="{{form.avatar}}" data-key="avatar" bindinput="input" maxlength="512" disabled="{{busy}}"/>
+    <view class="label">邮箱</view><input value="{{form.email}}" data-key="email" bindinput="input" maxlength="320" disabled="{{busy}}"/>
+    <view class="label">性别</view><picker range="{{genders}}" range-key="name" value="{{genderIndex}}" data-key="gender" bindchange="pick" disabled="{{busy}}">{{genderLabel}} ⌄</picker>
+    <view class="label">生日</view><picker mode="date" value="{{form.birthday}}" data-key="birthday" bindchange="pick" disabled="{{busy}}">{{form.birthday || '未设置'}} ⌄</picker><button wx:if="{{form.birthday}}" class="secondary small" bindtap="birthdayClear" disabled="{{busy}}">清除生日</button>
+    <button bindtap="save" disabled="{{busy || !user}}" loading="{{busy}}">保存个人资料</button>
+  </view>
+  <view wx:elif="{{tab === 'security'}}" class="card">
+    <view class="label">原密码</view><input password value="{{form.currentPassword}}" data-key="currentPassword" bindinput="input" maxlength="64" disabled="{{busy}}"/>
+    <view class="label">新密码（8–64 位，含大小写字母与数字）</view><input password value="{{form.newPassword}}" data-key="newPassword" bindinput="input" maxlength="64" disabled="{{busy}}"/>
+    <view class="label">再次输入新密码</view><input password value="{{form.confirmPassword}}" data-key="confirmPassword" bindinput="input" maxlength="64" disabled="{{busy}}"/>
+    <button bindtap="save" disabled="{{busy}}" loading="{{busy}}">修改密码</button>
+  </view>
+  <view wx:elif="{{tab === 'privacy'}}" class="card"><view class="row"><text>个人资料授权</text><switch checked="{{profileAuthorized}}" data-key="profileAuthorized" bindchange="privacy" color="#173e35" disabled="{{busy}}"/></view><view class="row"><text>接收消息偏好</text><switch checked="{{pushEnabled}}" data-key="pushEnabled" bindchange="privacy" color="#173e35" disabled="{{busy}}"/></view><button bindtap="save" disabled="{{busy}}" loading="{{busy}}">保存偏好</button></view>
+  <view wx:elif="{{tab === 'feedback'}}" class="card"><textarea value="{{form.content}}" data-key="content" bindinput="input" maxlength="2000" placeholder="请描述遇到的问题或建议" disabled="{{busy}}"/><input value="{{form.contact}}" data-key="contact" bindinput="input" maxlength="320" placeholder="联系方式（选填）" disabled="{{busy}}"/><button bindtap="save" disabled="{{busy}}" loading="{{busy}}">提交反馈</button></view>
+  <block wx:else>
+    <view class="muted">共 {{total}} 条{{tab === 'logins' ? '（最近登录记录）' : ''}}</view>
+    <view wx:for="{{rows}}" wx:key="index" class="card">
+      <block wx:if="{{tab === 'favorites' || tab === 'history'}}"><view data-id="{{item.id}}" bindtap="product"><image wx:if="{{item.image}}" class="image" src="{{item.image}}" mode="aspectFit"/><view>{{item.name}}</view><view wx:if="{{!item.unavailable}}" class="price">¥{{item.price}}</view><view class="muted">{{item.statusMessage}} · {{item.time}}</view></view><button class="secondary" data-id="{{item.id}}" bindtap="remove" disabled="{{busy}}">{{tab === 'favorites' ? '取消收藏' : '移除记录'}}</button></block>
+      <block wx:elif="{{tab === 'points'}}"><view>{{item.reason}}</view><view class="price">{{item.changeAmount > 0 ? '+' : ''}}{{item.changeAmount}}</view><view class="muted">余额 {{item.balance}} · {{item.createdAt}}</view></block>
+      <block wx:else><view>{{item.typeLabel}} · {{item.success ? '成功' : '失败'}}</view><view class="muted">{{item.ip || '未记录来源'}} · {{item.createdAt}}</view></block>
+    </view>
+    <view wx:if="{{!rows.length && !busy}}" class="empty">暂无记录</view>
+    <view class="actions"><button class="secondary" data-delta="-1" bindtap="turnPage" disabled="{{busy || page <= 1}}">上一页</button><text>{{page}} / {{pages}}</text><button class="secondary" data-delta="1" bindtap="turnPage" disabled="{{busy || page >= pages}}">下一页</button></view>
+    <button wx:if="{{tab === 'history' && total}}" class="secondary" bindtap="clearHistory" disabled="{{busy}}">清空浏览记录</button>
+  </block>
+  <button wx:if="{{error}}" class="secondary" bindtap="load" disabled="{{busy}}">重新加载</button>
+</view>

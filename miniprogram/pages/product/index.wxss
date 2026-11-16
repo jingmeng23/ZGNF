@@ -1,0 +1,1 @@
+.spec-row{display:flex;align-items:center;justify-content:space-between;gap:20rpx;padding:10rpx 0}.spec-row picker{width:65%;margin:0;padding:0;background:transparent}.spec-picker{padding:16rpx;background:#f4f6f2;border-radius:10rpx;text-align:right;color:#26382e;font-size:25rpx}

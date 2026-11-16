@@ -7,6 +7,7 @@ import com.gas.ecommerce.common.result.PageResult;
 import com.gas.ecommerce.modules.product.dto.*;
 import com.gas.ecommerce.modules.product.vo.AdminProductVO;
 import com.gas.ecommerce.modules.product.service.CatalogManagementService;
+import com.gas.ecommerce.modules.product.service.ProductImageStorage;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,13 +16,19 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 /**
  * HTTP 接口控制器；具体请求方法以类中标注的映射注解为准。
  */
 @RestController @RequestMapping("/api/v1/admin/products")
 public class AdminProductController {
     private final CatalogManagementService catalog;
-    public AdminProductController(CatalogManagementService catalog) { this.catalog = catalog; }
+    private final ProductImageStorage images;
+    public AdminProductController(CatalogManagementService catalog, ProductImageStorage images) {
+        this.catalog = catalog;
+        this.images = images;
+    }
 
     @GetMapping @RequiresPermission("product:read")
     public Result<PageResult<AdminProductVO>> list(@Valid @ModelAttribute AdminProductQuery query) {
@@ -34,6 +41,11 @@ public class AdminProductController {
     @GetMapping("/options") @RequiresPermission("product:read")
     public Result<com.gas.ecommerce.modules.product.vo.ProductOptionsVO> options() {
         return Result.success(catalog.productOptions());
+    }
+    @PostMapping(value = "/images", consumes = "multipart/form-data") @RequiresPermission("product:write")
+    public Result<ProductImageStorage.UploadedImage> uploadImage(@RequestPart("file") MultipartFile file)
+            throws java.io.IOException {
+        return Result.success(images.upload(file));
     }
     @PostMapping @RequiresPermission("product:write")
     public Result<AdminProductVO> create(@Valid @RequestBody ProductCreateRequest request) {

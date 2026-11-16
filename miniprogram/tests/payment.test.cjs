@@ -57,7 +57,7 @@ test('cashier never opens when merchant prepay is unavailable', async () => {
   try { await assert.rejects(pay('1'), /未启用/) } finally { api.request = realRequest }
 })
 test('relative media uses the configured public image origin and rejects protocol-relative URLs', () => {
-  assert.equal(api.image('/images/a.jpg'), 'https://shop.example.com/images/a.jpg')
+  assert.equal(api.image('/images/a.jpg'), require('../config').assetBase.replace(/\/$/, '') + '/images/a.jpg')
   assert.equal(api.image('//attacker/a.jpg'), '')
   assert.equal(api.image('javascript:alert(1)'), '')
 })

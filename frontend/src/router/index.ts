@@ -8,7 +8,7 @@ import { canVisit, firstAdminPage, refreshAdminProfile } from '../admin/permissi
 
 export const router = createRouter({
   history: createWebHashHistory(),
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: (to, _from, savedPosition) => to.path === '/catalog' && savedPosition ? false : savedPosition || { top: 0 },
   routes: [
     { path: '/admin/no-access', component: () => import('../admin/AdminNoAccess.vue'), meta: { title: '暂无访问权限' } },
     { path: '/admin/employees', component: () => import('../admin/AdminEmployees.vue'), meta: { title: '员工管理' } },

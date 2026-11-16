@@ -1,6 +1,8 @@
 server:
   port: 8080
 app:
+  product-images:
+    directory: ${PRODUCT_IMAGE_DIRECTORY:./uploads/products}
   wechat:
     enabled: ${WECHAT_ENABLED:false}
     app-id: ${WECHAT_APP_ID:}

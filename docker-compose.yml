@@ -65,6 +65,8 @@ services:
       ENCRYPTION_KEY: local-compose-phone-encryption-key-2026
       MALL_ES_URL: http://elasticsearch:9200
       MALL_ES_SYNC_ENABLED: "true"
+      PRODUCT_IMAGE_DIRECTORY: /app/uploads/products
+    volumes: ["product_images:/app/uploads"]
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -74,3 +76,4 @@ volumes:
   mysql_data:
   redis_data:
   elasticsearch_data:
+  product_images:

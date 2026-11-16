@@ -12,6 +12,8 @@
     "test": "vitest run",
     "format": "prettier --write src/admin src/api/admin.ts src/api/http.ts src/api/http.test.ts src/styles src/router/index.ts src/App.vue",
     "test:browser": "node scripts/smoke.mjs",
+    "test:browser:aftersales": "node scripts/aftersales-smoke.mjs",
+    "test:browser:overview": "node scripts/overview-smoke.mjs",
     "app:sync": "node scripts/android.mjs",
     "app:apk": "node scripts/android.mjs --apk",
     "app:release": "node scripts/android.mjs --release",

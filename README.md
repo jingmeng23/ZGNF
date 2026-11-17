@@ -1,4 +1,6 @@
-# 自贡能发商城
+# 自贡能发商城（ZGNF）
+
+网站、APP、微信小程序开发。
 
 微信小程序客户端位于 [miniprogram](miniprogram/README.md)，支付配置、账号绑定和上线步骤见 [微信小程序接入说明](docs/guides/wechat-mini-program.md)。
 

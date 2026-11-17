@@ -5,14 +5,23 @@ const { createRequire } = require('node:module')
 function page(name, app = { globalData: {} }) {
   const file = path.resolve(__dirname, '../pages', name, 'index.js')
   let definition
-  vm.runInNewContext(fs.readFileSync(file, 'utf8'), { require: createRequire(file), wx: global.wx, getApp: () => app, Page: value => { definition = value } })
+  vm.runInNewContext(fs.readFileSync(file, 'utf8'), { require: createRequire(file), wx: global.wx, getApp: () => app, getCurrentPages: () => app.pages || [], Page: value => { definition = value } })
   definition.data = JSON.parse(JSON.stringify(definition.data))
   definition.setData = function(values) {
     for (const [key, value] of Object.entries(values)) {
-      const parts = key.split('.'), last = parts.pop()
+      // WeChat uses list[0].field for array elements. Reject numeric dot paths
+      // rather than accepting them as ordinary JS access and hiding runtime bugs.
+      const parts = Array.from(key.matchAll(/([^.[\]]+)|\[(\d+)\]/g), match => ({ key: match[1] || match[2], index: match[2] !== undefined }))
+      const last = parts.pop()
       let target = this.data
-      for (const part of parts) { if (!target[part]) target[part] = {}; target = target[part] }
-      target[last] = value
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i], next = parts[i + 1] || last
+        if (Array.isArray(target) && !part.index) throw new TypeError('Use bracket indices in setData array paths: ' + key)
+        if (!target[part.key]) target[part.key] = next.index ? [] : {}
+        target = target[part.key]
+      }
+      if (Array.isArray(target) && !last.index) throw new TypeError('Use bracket indices in setData array paths: ' + key)
+      target[last.key] = value
     }
   }
   return definition

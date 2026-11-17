@@ -6,19 +6,26 @@
 
 | 方法 | 路径 | 功能 / JSON 请求体 |
 | --- | --- | --- |
-| GET | /api/v1/cart | 查询购物车及汇总 |
+| GET | /api/v1/cart?page=1&size=20 | 分页查询可购商品及全车汇总 |
 | POST | /api/v1/cart/items | 加购：{"productId":1,"quantity":2} |
 | PUT | /api/v1/cart/items/{id} | 设置数量：{"quantity":3} |
 | PUT | /api/v1/cart/items/{id}/selection | 单项选中/取消：{"selected":true} |
 | PUT | /api/v1/cart/selection | 全选/取消全选：{"selected":false} |
 | DELETE | /api/v1/cart/items/{id} | 删除一项 |
+| DELETE | /api/v1/cart/items | 批量删除：{"ids":[1,2]}，每批最多 100 个购物车项 ID |
 | DELETE | /api/v1/cart/selected | 删除所有已选项 |
 | DELETE | /api/v1/cart | 清空当前用户购物车 |
 
 路径中的 id 为购物车项 ID，非商品 ID。删除成功返回 data: null。
-其余接口返回购物车：items、totalQuantity、selectedQuantity、selectedAmount。
+其余接口返回购物车：items、invalidItems、total、page、size、totalQuantity、selectedQuantity、selectedAmount。
 items 包含 id、productId、productName、coverUrl、quantity、unitPrice、
 availableStock、selected、available、subtotal。
+
+`page` 默认 1、`size` 默认 20 且最大 100；`total` 是可购商品种数，只有可购 `items` 分页，`invalidItems` 返回全部失效项。件数与金额汇总覆盖全购物车，不限当前页。写入接口返回全车视图，客户端需要分页展示时应重新 GET 当前页。每项另含 `priceChanged`（相对加购/修改时快照的价格变化）与 `degraded`（商品信息查询失败或商品不存在时的降级状态）。
+
+可购商品按购物车项 ID 倒序稳定分页；数量或勾选变化不会改变商品所在页，新加入的购物车项排在前面。
+
+全选接口会先清除全车勾选，再只选中当前可购买商品，失效项不会被重新勾选。取消全选清除全车选择；删除已选也覆盖全部分页，包含仍被历史勾选的失效项。
 
 ## 业务规则
 

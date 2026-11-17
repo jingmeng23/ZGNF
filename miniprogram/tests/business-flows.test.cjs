@@ -108,7 +108,7 @@ test('all-selected state covers the entire cart even when the current page is co
   assert.equal(p.data.allSelected, true)
 })
 
-test('selecting all deselects invalid entries so they cannot enter checkout', async () => {
+test('selecting all relies on the atomic backend selection then reloads authoritative invalid selections', async () => {
   const p = page('cart'), calls = []
   p.data.cart = { items: [], invalidItems: [{ id: '9007199254740993', quantity: 1, selected: true }] }
   api.request = async (path, method, body) => {
@@ -117,7 +117,9 @@ test('selecting all deselects invalid entries so they cannot enter checkout', as
   }
   await p.all()
   assert.equal(calls[0].path, '/cart/selection'); assert.equal(calls[0].body.selected, true)
-  assert.equal(calls[1].path, '/cart/items/9007199254740993/selection'); assert.equal(calls[1].body.selected, false)
+  assert.equal(calls[1].path, '/cart?page=1&size=20')
+  assert.equal(calls.length, 2)
+  assert.equal(p.data.selectedInvalid, 0)
 })
 
 test('a lost checkout response survives reopening the page and retries the original order snapshot', async () => {

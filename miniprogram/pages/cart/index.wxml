@@ -1,24 +1,110 @@
-<view class="page">
-  <view class="title">购物车</view><view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{notice}}" class="notice">{{notice}}</view>
-  <button wx:if="{{!authenticated}}" bindtap="login">登录后查看购物车</button>
-  <block wx:if="{{cart}}">
-    <view class="row"><text class="muted">可购 {{cart.total}} 种 · 共 {{cart.totalQuantity}} 件</text><button class="secondary small" bindtap="all" disabled="{{busy || loading || !cart.total}}">{{allSelected ? '取消全选' : '全选可购商品'}}</button></view>
-    <view wx:for="{{cart.items}}" wx:key="id" class="card">
-      <view class="row" data-id="{{item.productId}}" bindtap="product"><image wx:if="{{item.image}}" class="thumb" src="{{item.image}}" mode="aspectFit"/><view><view>{{item.productName}}</view><view class="price">¥{{item.unitPrice}}</view><view class="muted">库存 {{item.availableStock}} · 小计 ¥{{item.subtotal}}</view></view></view>
-      <view wx:if="{{item.priceChanged}}" class="notice">商品价格已变动，结算以当前价格为准</view>
-      <view class="actions"><button class="secondary small" data-action="select" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading}}">{{item.selected ? '✓ 已选' : '选择'}}</button><button class="secondary small" data-action="minus" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || item.quantity <= 1}}">−</button><input style="width:120rpx;margin:0;text-align:center" type="number" value="{{item.quantity}}" data-id="{{item.id}}" bindblur="quantity" disabled="{{busy || loading}}"/><button class="secondary small" data-action="plus" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || item.quantity >= item.availableStock || item.quantity >= 999}}">＋</button><button class="secondary small" data-action="remove" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading}}">删除</button></view>
-    </view>
-    <view wx:if="{{!cart.items.length}}" class="empty">暂无可购买商品，去商城看看吧</view>
-    <view class="actions"><button class="secondary" bindtap="previous" disabled="{{busy || loading || page <= 1}}">上一页</button><text>{{page}} / {{pages}}</text><button class="secondary" bindtap="next" disabled="{{busy || loading || page >= pages}}">下一页</button></view>
-    <view wx:if="{{cart.invalidItems.length}}" class="section">暂不可购买 · {{cart.invalidItems.length}} 种</view>
-    <view wx:for="{{cart.invalidItems}}" wx:key="id" class="card">
-      <view>{{item.productName}} × {{item.quantity}}</view><view class="muted">{{item.degraded ? '商品信息暂不可用，请稍后刷新' : '已下架或库存不足'}} · 当前库存 {{item.availableStock}}</view>
-      <view class="actions"><button wx:if="{{item.selected}}" class="secondary" data-action="select" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading}}">取消选中</button><button class="secondary" data-action="remove" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading}}">移除</button></view>
-    </view>
-    <view wx:if="{{selectedInvalid}}" class="error">有 {{selectedInvalid}} 种不可购买商品仍被选中，请取消选择后结算。</view>
-    <view class="card row"><view>已选可购商品 {{cart.selectedQuantity}} 件<view class="price">¥{{cart.selectedAmount}}</view></view><button bindtap="checkout" disabled="{{busy || loading || !cart.selectedQuantity || selectedInvalid}}">确认结算</button></view>
-    <view class="actions"><button class="secondary" data-action="selected" bindtap="batch" disabled="{{busy || loading || (!cart.selectedQuantity && !selectedInvalid)}}">删除已选</button><button class="secondary" data-action="invalid" bindtap="batch" disabled="{{busy || loading || !cart.invalidItems.length}}">清理不可购买</button><button class="secondary" data-action="clear" bindtap="batch" disabled="{{busy || loading || !cart.totalQuantity}}">清空购物车</button></view>
+<view class="cart-page {{quantityBusy ? 'quantity-updating' : ''}}">
+  <view class="cart-header">
+    <view><view class="cart-heading">购物车</view><view class="cart-caption">{{cart ? '共 ' + cart.totalQuantity + ' 件商品' : '选好心仪商品，再一起结算'}}</view></view>
+    <button wx:if="{{cart && cart.totalQuantity}}" class="manage-button" bindtap="toggleManage" disabled="{{busy || loading}}" hover-class="cart-pressed">{{managing ? '完成' : '管理'}}</button>
+  </view>
+
+  <view wx:if="{{error}}" class="cart-feedback" role="alert"><text class="feedback-copy">{{error}}</text><button class="retry-button" bindtap="load" disabled="{{busy || loading}}">重试</button></view>
+  <view wx:if="{{notice}}" class="cart-note">{{notice}}</view>
+
+  <view wx:if="{{!authenticated}}" class="cart-empty">
+    <view class="empty-icon"><image src="/assets/account/box.png" mode="aspectFit"/></view>
+    <view class="empty-heading">登录后，找回您的购物车</view>
+    <view class="empty-description">与商城账号同步，选好的商品都在这里</view>
+    <button class="primary-button empty-action" bindtap="login" hover-class="primary-pressed">登录 / 注册</button>
+    <button class="text-button" bindtap="shop" hover-class="cart-pressed">先去选购商品</button>
+  </view>
+
+  <block wx:elif="{{loading && !cart}}">
+    <view class="cart-loading" role="status">正在同步购物车…</view>
+    <view wx:for="{{[1, 2, 3]}}" wx:key="*this" class="cart-skeleton" aria-hidden="true"><view class="skeleton-image"/><view class="skeleton-copy"><view class="skeleton-line"/><view class="skeleton-line short"/><view class="skeleton-line short"/></view></view>
   </block>
-  <view wx:if="{{loading}}" class="empty">正在同步购物车…</view>
-  <button wx:if="{{authenticated}}" class="secondary" bindtap="load" disabled="{{busy || loading}}">刷新购物车</button>
+
+  <view wx:elif="{{!cart}}" class="cart-empty">
+    <view class="empty-icon"><image src="/assets/account/box.png" mode="aspectFit"/></view>
+    <view class="empty-heading">暂时无法读取购物车</view>
+    <view class="empty-description">请检查网络后重新加载，已选商品不会因此被删除</view>
+    <button class="primary-button empty-action" bindtap="load" disabled="{{loading}}">重新加载</button>
+  </view>
+
+  <view wx:elif="{{!cart.totalQuantity}}" class="cart-empty">
+    <view class="empty-icon"><image src="/assets/account/box.png" mode="aspectFit"/></view>
+    <view class="empty-heading">购物车还是空的</view>
+    <view class="empty-description">把喜欢的商品加入购物车，方便一起选购</view>
+    <button class="primary-button empty-action" bindtap="shop" hover-class="primary-pressed">去选购商品</button>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{managing}}" class="manage-toolbar">
+      <text>勾选后可批量删除</text><button class="danger-text" data-action="clear" bindtap="batch" disabled="{{busy || loading || stale}}">清空购物车</button>
+    </view>
+    <view wx:if="{{loading || (busy && !quantityBusy)}}" class="cart-sync" role="status">{{busy ? '正在更新购物车…' : '正在同步价格和库存…'}}</view>
+    <view wx:elif="{{stale}}" class="cart-sync stale-note">同步未完成，请刷新后再操作或结算</view>
+
+    <view wx:for="{{cart.items}}" wx:key="id" class="cart-product">
+      <view class="product-row">
+        <button class="select-button" data-action="select" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale}}" aria-role="checkbox" aria-checked="{{item.selected}}" aria-label="{{(item.selected ? '取消选择' : '选择') + item.productName}}" hover-class="cart-pressed"><view class="select-circle {{item.selected ? 'is-selected' : ''}}"><view wx:if="{{item.selected}}" class="check-mark"/></view></button>
+        <button class="product-image-button" data-id="{{item.productId}}" bindtap="product" aria-label="{{'查看' + item.productName}}" hover-class="cart-pressed">
+          <image wx:if="{{item.image}}" class="cart-image" src="{{item.image}}" mode="aspectFit" lazy-load data-id="{{item.id}}" data-group="items" binderror="imageError"/>
+          <view wx:else class="image-placeholder">暂无图片</view>
+        </button>
+        <view class="product-copy">
+          <button class="product-name" data-id="{{item.productId}}" bindtap="product" hover-class="cart-pressed">{{item.productName || '商品信息待更新'}}</button>
+          <view class="product-detail">{{item.availableStock <= 5 ? '当前可购 ' + item.availableStock + ' 件' : '数量与库存以结算时为准'}}</view>
+          <view class="product-price"><text wx:if="{{item.priceText}}" class="currency">¥</text>{{item.priceText || '价格待确认'}}</view>
+        </view>
+      </view>
+      <view wx:if="{{item.priceChanged}}" class="price-change">价格已更新，请确认当前售价</view>
+      <view class="product-controls">
+        <button wx:if="{{managing}}" class="remove-button" data-action="remove" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale}}">删除</button>
+        <text wx:else class="item-subtotal">{{item.subtotalText ? '小计 ¥' + item.subtotalText : '小计待确认'}}</text>
+        <view class="quantity-stepper">
+          <button class="quantity-button {{item.quantity <= 1 ? 'quantity-limit' : ''}}" data-action="minus" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale || checkingOut || item.quantity <= 1}}" hover-class="quantity-pressed" aria-label="减少一件"><view class="quantity-icon" aria-hidden="true"/></button>
+          <input class="quantity-input" type="number" maxlength="3" value="{{quantityValues[item.id]}}" data-id="{{item.id}}" bindfocus="quantityFocus" bindinput="quantityInput" bindblur="quantity" bindconfirm="quantity" confirm-type="done" disabled="{{busy || loading || stale || checkingOut}}" aria-label="{{item.productName + '的购买数量'}}"/>
+          <button class="quantity-button quantity-plus {{item.quantity >= item.maxQuantity ? 'quantity-limit' : ''}}" data-action="plus" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale || checkingOut || item.quantity >= item.maxQuantity}}" hover-class="quantity-pressed" aria-label="增加一件"><view class="quantity-icon" aria-hidden="true"/></button>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{pages > 1}}" class="cart-pagination">
+      <button bindtap="previous" disabled="{{busy || loading || page <= 1}}" hover-class="cart-pressed">上一页</button><text>{{page}} / {{pages}}</text><button bindtap="next" disabled="{{busy || loading || page >= pages}}" hover-class="cart-pressed">下一页</button>
+    </view>
+
+    <view wx:if="{{cart.invalidItems.length}}" class="invalid-section">
+      <view class="invalid-heading"><view><text class="invalid-title">暂不可购买</text><text class="invalid-count">{{cart.invalidItems.length}} 种</text></view><button class="clean-button" data-action="invalid" bindtap="batch" disabled="{{busy || loading || stale}}">清理失效商品</button></view>
+      <view class="invalid-tip">下架、库存不足或信息暂不可用的商品不计入合计</view>
+      <view wx:for="{{cart.invalidItems}}" wx:key="id" class="invalid-product">
+        <view class="invalid-image-frame"><image wx:if="{{item.image}}" class="cart-image" src="{{item.image}}" mode="aspectFit" lazy-load data-id="{{item.id}}" data-group="invalidItems" binderror="imageError"/><view wx:else class="image-placeholder">暂无图片</view><text class="invalid-badge">暂不可购</text></view>
+        <view class="invalid-copy"><view class="invalid-name">{{item.productName || '商品信息待更新'}}</view><view class="invalid-reason">{{item.degraded ? '信息暂不可用，请稍后刷新' : (item.availableStock < item.quantity ? '当前库存不足，可用 ' + item.availableStock + ' 件' : '商品已下架或暂不可售')}}</view><view class="invalid-quantity">数量 {{item.quantity}} 件</view></view>
+        <button class="remove-button" data-action="remove" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale}}">移除</button>
+        <button wx:if="{{item.selected}}" class="cancel-invalid" data-action="select" data-id="{{item.id}}" bindtap="update" disabled="{{busy || loading || stale}}">取消选中</button>
+      </view>
+    </view>
+
+    <view wx:if="{{selectedInvalid}}" class="cart-feedback selected-warning" role="alert">仍有 {{selectedInvalid}} 种失效商品被选中，请取消选中或全选可购商品后结算。</view>
+    <view class="cart-bottom-note">{{pages > 1 ? '全选、合计和删除已选均包含全部分页。' : ''}}购物车不预留库存，下单时将再次核验价格与库存。</view>
+    <button class="continue-shopping" bindtap="shop" disabled="{{busy}}" hover-class="cart-pressed">继续选购</button>
+
+    <view class="cart-footer {{!managing && amountText.length > 10 ? 'footer-long-amount' : ''}}">
+      <view wx:if="{{!managing && !checkingOut && (!busy || quantityBusy) && !loading && (stale || selectedInvalid || editingQuantity || !amountText || !cart.selectedQuantity)}}" class="footer-guidance {{stale || selectedInvalid || !amountText ? 'guidance-warning' : ''}}" role="status">
+        <text class="guidance-copy">{{stale ? '价格与库存未同步，请刷新后结算' : (editingQuantity ? '请先完成数量输入，再核对合计' : (selectedInvalid ? '请取消失效商品的勾选后结算' : (!amountText ? '商品金额待确认，请刷新后重试' : (cart.total ? '请先勾选要购买的商品' : '暂无可结算商品，可以继续选购'))))}}</text>
+        <button wx:if="{{stale || (!amountText && !editingQuantity)}}" class="guidance-action" bindtap="load" disabled="{{busy || loading}}">刷新</button>
+        <button wx:elif="{{selectedInvalid && !editingQuantity}}" class="guidance-action" bindtap="deselectInvalid" disabled="{{busy || loading}}">取消勾选</button>
+        <button wx:elif="{{!cart.total && !editingQuantity}}" class="guidance-action" bindtap="shop">去选购</button>
+      </view>
+      <view class="footer-main">
+        <button class="select-all" bindtap="all" disabled="{{busy || loading || stale || checkingOut || editingQuantity || !cart.total}}" aria-role="checkbox" aria-checked="{{allSelected}}" aria-label="全选或取消全部可购商品">
+          <view class="select-circle {{allSelected ? 'is-selected' : (cart.selectedQuantity ? 'is-partial' : '')}}"><view wx:if="{{allSelected}}" class="check-mark"/><view wx:elif="{{cart.selectedQuantity}}" class="partial-mark"/></view><text>全选</text>
+        </button>
+        <view class="footer-summary">
+          <view class="summary-label">{{managing ? '已选 ' + selectedTotal + ' 件' : (cart.selectedQuantity ? '已选 ' + cart.selectedQuantity + ' 件 · 合计' : '商品合计')}}</view>
+          <view wx:if="{{!managing}}" class="summary-price {{stale ? 'summary-pending' : ''}}"><text wx:if="{{amountText}}" class="currency">¥</text><text class="summary-value">{{amountText || '待确认'}}</text></view>
+          <view wx:elif="{{selectedInvalid}}" class="management-note">含已选失效商品</view>
+        </view>
+        <button wx:if="{{managing}}" class="delete-selected" data-action="selected" bindtap="batch" disabled="{{busy || loading || stale || editingQuantity || !selectedTotal}}">删除已选</button>
+        <button wx:else class="checkout-button {{quantityBusy && cart.selectedQuantity && !selectedInvalid && amountText ? 'checkout-quantity-pending' : ''}}" bindtap="checkout" loading="{{checkingOut}}" disabled="{{busy || loading || stale || checkingOut || editingQuantity || !cart.selectedQuantity || selectedInvalid || !amountText}}" hover-class="primary-pressed" aria-label="{{'去结算，已选' + cart.selectedQuantity + '件，商品合计' + (amountText || '待确认') + '元'}}">{{checkingOut ? '正在前往' : (loading || (busy && !quantityBusy) ? '更新中' : '去结算')}}</button>
+      </view>
+      <view class="footer-description">{{managing ? '删除已选包含全部分页，删除前会再次确认' : '运费及其他费用将在确认订单时核算'}}</view>
+    </view>
+  </block>
 </view>

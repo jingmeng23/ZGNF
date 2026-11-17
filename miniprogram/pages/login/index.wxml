@@ -1,1 +1,68 @@
-<view class="page"><view class="eyebrow">WELCOME HOME</view><view class="title">{{authenticated ? '关联当前微信' : registering ? '创建商城账号' : '登录自贡能发'}}</view><view class="notice">与燃气商城网站共用账号。首次请使用原手机号和密码登录，再绑定当前微信用于支付。</view><view wx:if="{{error}}" class="error">{{error}}</view><view wx:if="{{!authenticated}}" class="card"><input data-field="phone" value="{{phone}}" bindinput="input" type="number" maxlength="11" placeholder="手机号"/><input data-field="password" value="{{password}}" bindinput="input" password maxlength="64" placeholder="{{registering ? '8至64位，含大小写字母和数字' : '密码'}}"/><input wx:if="{{registering}}" data-field="nickname" value="{{nickname}}" bindinput="input" maxlength="64" placeholder="昵称（选填）"/><button bindtap="submit" loading="{{busy}}" disabled="{{busy}}">{{registering ? '注册' : '手机号密码登录'}}</button><button class="secondary" bindtap="toggle">{{registering ? '已有账号，去登录' : '注册新账号'}}</button></view><button bindtap="wechat" loading="{{busy}}" disabled="{{busy}}">{{authenticated ? '绑定当前微信' : '已绑定账号：微信登录'}}</button><button wx:if="{{authenticated}}" class="secondary" bindtap="done">返回商城</button></view>
+<view class="login-page">
+  <view class="login-brand">
+    <text class="brand-name">自贡能发</text>
+    <text class="brand-caption">燃气好设备，生活好帮手</text>
+  </view>
+
+  <view class="login-card">
+    <view class="login-heading">{{authenticated ? (bound ? '微信已绑定' : '绑定当前微信') : (registering ? '注册商城账号' : '欢迎登录')}}</view>
+    <view class="login-description">{{authenticated ? (bound ? '下次登录，更方便一步' : '绑定后可使用微信登录及微信支付') : (registering ? '设置账号，方便管理订单与售后' : '登录后查看订单，管理收藏与收货地址')}}</view>
+
+    <view wx:if="{{message}}" class="feedback feedback-success" role="alert">{{message}}</view>
+    <view wx:if="{{error}}" class="feedback feedback-error" role="alert">{{error}}</view>
+
+    <block wx:if="{{!authenticated}}">
+      <view class="form-field">
+        <view class="field-label">手机号</view>
+        <view class="input-shell {{focusedField === 'phone' ? 'input-focused' : ''}} {{errorField === 'phone' ? 'input-error' : ''}}">
+          <input class="login-input" data-field="phone" value="{{phone}}" bindinput="input" bindfocus="focus" bindblur="blur" type="number" maxlength="11" placeholder="请输入 11 位手机号" placeholder-class="input-placeholder" disabled="{{busy}}" aria-label="手机号"/>
+          <button wx:if="{{phone}}" class="field-action" bindtap="clearPhone" disabled="{{busy}}" aria-label="清空手机号" hover-class="login-pressed">清空</button>
+        </view>
+      </view>
+      <view class="form-field">
+        <view class="field-label">{{registering ? '设置密码' : '密码'}}</view>
+        <view class="input-shell {{focusedField === 'password' ? 'input-focused' : ''}} {{errorField === 'password' ? 'input-error' : ''}}">
+          <input class="login-input" data-field="password" value="{{password}}" bindinput="input" bindfocus="focus" bindblur="blur" password="{{!passwordVisible}}" maxlength="64" placeholder="{{registering ? '请输入 8–64 位密码' : '请输入密码'}}" placeholder-class="input-placeholder" disabled="{{busy}}" confirm-type="done" bindconfirm="submit" aria-label="{{registering ? '设置密码' : '密码'}}"/>
+          <button class="field-action" bindtap="togglePassword" disabled="{{busy}}" aria-label="{{passwordVisible ? '隐藏密码' : '显示密码'}}" hover-class="login-pressed">{{passwordVisible ? '隐藏' : '显示'}}</button>
+        </view>
+        <view wx:if="{{registering}}" class="field-hint">须同时包含大写字母、小写字母和数字</view>
+      </view>
+      <block wx:if="{{registering}}">
+        <view class="form-field">
+          <view class="field-label">确认密码</view>
+          <view class="input-shell {{focusedField === 'confirmPassword' ? 'input-focused' : ''}} {{errorField === 'confirmPassword' ? 'input-error' : ''}}">
+            <input class="login-input" data-field="confirmPassword" value="{{confirmPassword}}" bindinput="input" bindfocus="focus" bindblur="blur" password="{{!passwordVisible}}" maxlength="64" placeholder="请再次输入密码" placeholder-class="input-placeholder" disabled="{{busy}}" aria-label="确认密码"/>
+          </view>
+        </view>
+        <view class="form-field">
+          <view class="field-label">昵称<text class="optional-label">（选填）</text></view>
+          <view class="input-shell {{focusedField === 'nickname' ? 'input-focused' : ''}}">
+            <input class="login-input" data-field="nickname" value="{{nickname}}" bindinput="input" bindfocus="focus" bindblur="blur" maxlength="64" placeholder="怎么称呼您" placeholder-class="input-placeholder" disabled="{{busy}}" confirm-type="done" bindconfirm="submit" aria-label="昵称，选填"/>
+          </view>
+        </view>
+      </block>
+
+      <button class="primary-button" bindtap="submit" loading="{{busy && action === 'password'}}" disabled="{{busy}}" hover-class="primary-pressed">{{busy && action === 'password' ? (registering ? '正在注册' : '正在登录') : (registering ? '注册账号' : '登录')}}</button>
+      <button class="text-button mode-switch" bindtap="toggle" disabled="{{busy}}" hover-class="login-pressed">{{registering ? '已有账号？返回登录' : '还没有账号？立即注册'}}</button>
+
+      <block wx:if="{{!registering}}">
+        <view class="login-divider"><view class="divider-line"/><text>其他登录方式</text><view class="divider-line"/></view>
+        <button class="wechat-button" bindtap="wechat" loading="{{busy && action === 'wechat'}}" disabled="{{busy}}" hover-class="login-pressed">{{busy && action === 'wechat' ? '正在微信登录' : '微信登录'}}</button>
+        <view class="wechat-hint">适用于已绑定微信的商城账号</view>
+      </block>
+    </block>
+
+    <view wx:else class="binding-content">
+      <view class="binding-symbol {{bound ? 'binding-complete' : ''}}" aria-hidden="true"><image src="/assets/account/{{bound ? 'user' : 'settings'}}.png" class="binding-icon" mode="aspectFit"/></view>
+      <view class="binding-note">{{bound ? '您可以返回原页面继续选购商品' : '将当前微信与已登录的商城账号关联，已有账号和订单保持不变。'}}</view>
+      <button wx:if="{{!bound}}" class="primary-button" bindtap="wechat" loading="{{busy && action === 'wechat'}}" disabled="{{busy}}" hover-class="primary-pressed">{{busy ? '正在绑定' : '确认绑定当前微信'}}</button>
+      <button class="{{bound ? 'primary-button' : 'text-button'}}" bindtap="done" disabled="{{busy}}" hover-class="login-pressed">{{bound ? '完成，返回原页面' : '暂不绑定，返回原页面'}}</button>
+    </view>
+  </view>
+
+  <view class="login-footer">
+    <button wx:if="{{!authenticated}}" class="browse-button" bindtap="browse" disabled="{{busy}}" hover-class="login-pressed">先逛逛，暂不登录<view class="browse-arrow" aria-hidden="true"/></button>
+    <button class="text-button help-button" bindtap="help" hover-class="login-pressed">登录遇到问题</button>
+    <view wx:if="{{!authenticated}}" class="footer-note">浏览商品无需登录</view>
+  </view>
+</view>

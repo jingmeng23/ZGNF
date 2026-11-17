@@ -237,9 +237,9 @@ public class CartServiceImpl extends ServiceImpl<CartItemMapper, CartItem> imple
     }
 
     private CartVO buildCart(Long userId, int page, int size) {
-        // 1. 拉取该用户全部购物车明细，按更新时间与 ID 倒序（最近操作的排前面）
+        // 1. 按购物车项 ID 倒序固定分页顺序，数量或勾选更新不会让商品换页
         List<CartItem> items = list(Wrappers.<CartItem>lambdaQuery().eq(CartItem::getUserId, userId)
-                .orderByDesc(CartItem::getUpdateTime).orderByDesc(CartItem::getId));
+                .orderByDesc(CartItem::getId));
         if (items.isEmpty()) return new CartVO(List.of(), List.of(), 0, page, size, 0, 0, BigDecimal.ZERO);
 
         List<Long> productIds = items.stream().map(CartItem::getProductId).distinct().toList();

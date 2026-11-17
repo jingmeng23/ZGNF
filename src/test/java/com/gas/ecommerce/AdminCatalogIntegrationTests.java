@@ -765,6 +765,13 @@ class AdminCatalogIntegrationTests {
                 .andExpect(jsonPath("$.data.selectedAmount").value(250));
         mvc.perform(get("/api/v1/cart?page=2&size=1").header("Authorization", userBearer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].priceChanged").value(true));
+        mvc.perform(put("/api/v1/cart/items/" + firstItem).header("Authorization", userBearer)
+                        .contentType("application/json").content("{\"quantity\":3}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[1].id").value(firstItem));
+        mvc.perform(get("/api/v1/cart?page=2&size=1").header("Authorization", userBearer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value(firstItem))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(3));
         mvc.perform(delete("/api/v1/cart/items").header("Authorization", userBearer).contentType("application/json")
                         .content(json.writeValueAsString(Map.of("ids", java.util.List.of(firstItem, secondItem)))))
                 .andExpect(status().isOk());
